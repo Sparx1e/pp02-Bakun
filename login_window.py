@@ -11,20 +11,17 @@ class LoginWindow(QDialog):
     def setup_ui(self):
         layout = QVBoxLayout()
         
-        # Задание 2: Поле для логина
         self.login_input = QLineEdit()
         self.login_input.setPlaceholderText("Введите логин")
         layout.addWidget(QLabel("Логин:"))
         layout.addWidget(self.login_input)
         
-        # Задание 3: Кнопка «Войти»
         self.login_button = QPushButton("Войти")
         self.login_button.clicked.connect(self.check_login)
         layout.addWidget(self.login_button)
         
         self.setLayout(layout)
 
-    # Задание 4: Проверка логина в БД
     def check_login(self):
         login = self.login_input.text().strip()
         
@@ -40,7 +37,6 @@ class LoginWindow(QDialog):
                 user_id, role_id = result
                 self.accept() 
                 
-                # Задание 5: Передача user_id и role_id в MainWindow
                 self.main_window = MainWindow(user_id=user_id, role_id=role_id)
                 self.main_window.show()
             else:
