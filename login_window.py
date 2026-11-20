@@ -58,6 +58,7 @@ class LoginWindow(QDialog):
             QMessageBox.information(self, "Информация", f"Добро пожаловать, {full_name}!")
 
             self.main_window = MainWindow(
+                db=self.db, 
                 user_id=user_id,
                 role_id=role_id,
                 full_name=full_name
