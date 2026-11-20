@@ -30,16 +30,25 @@ class LoginWindow(QDialog):
             return
             
         try:
-            self.db.cursor.execute("SELECT user_id, role_id FROM users WHERE login = %s", (login,))
+            self.db.cursor.execute(
+                "SELECT user_id, role_id, last_name, first_name, middle_name FROM users WHERE login = %s", 
+                (login,)
+            )
             result = self.db.cursor.fetchone()
             
             if result:
-                user_id, role_id = result
+                user_id, role_id, last_name, first_name, middle_name = result
+                
+                parts = [last_name, first_name]
+                if middle_name:
+                    parts.append(middle_name)
+                full_name = " ".join(parts)
+                
                 self.accept() 
                 
-                self.main_window = MainWindow(user_id=user_id, role_id=role_id)
+                self.main_window = MainWindow(user_id=user_id, role_id=role_id, full_name=full_name)
                 self.main_window.show()
             else:
-                QMessageBox.warning(self, "Ошибка", "Пользователь не найден")
+                QMessageBox.warning(self, "Ошибка авторизации", "Пользователь не найден")
         except Exception as e:
             QMessageBox.critical(self, "Ошибка БД", f"Ошибка при запросе: {e}")

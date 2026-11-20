@@ -2,10 +2,11 @@ from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt
 
 class MainWindow(QMainWindow):
-    def __init__(self, user_id=None, role_id=None):
+    def __init__(self, user_id=None, role_id=None, full_name=None):
         super().__init__()
         self.user_id = user_id
         self.role_id = role_id
+        self.full_name = full_name
         
         self.setWindowTitle("Главное окно - Мир киберспорта")
         self.resize(600, 400)
