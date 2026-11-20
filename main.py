@@ -2,6 +2,8 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QLabel,
     QStackedWidget, QPushButton, QMessageBox
 )
+from PySide6.QtCore import Qt 
+
 class MainWindow(QMainWindow):
     def __init__(self, user_id=None, role_id=None, full_name=None):
         super().__init__()
@@ -20,7 +22,7 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout()
 
         title_label = QLabel("Мир киберспорта")
-        title_label.setAlignment(Qt.AlignCenter) # type: ignore
+        title_label.setAlignment(Qt.AlignCenter)  # type: ignore
         title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #458B8B;")
         
         user_info_label = QLabel(f"Вы вошли как: {self.full_name} (Роль ID: {self.role_id})")
@@ -64,7 +66,6 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(self.stacked_widget)
         main_layout.addWidget(self.back_button)
-
         central_widget.setLayout(main_layout)
 
         self.switch_page(0)
@@ -76,14 +77,12 @@ class MainWindow(QMainWindow):
 
     def switch_page(self, index):
         self.stacked_widget.setCurrentIndex(index)
-        
         titles = [
             "Мир киберспорта — Каталог",
             "Мир киберспорта — Карточка товара",
             "Мир киберспорта — Заказы"
         ]
         self.setWindowTitle(titles[index])
-        
         if index == 0:
             self.refresh_catalog()
 
@@ -94,7 +93,6 @@ class MainWindow(QMainWindow):
             "Вы уверены, что хотите выйти?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-
         if reply == QMessageBox.StandardButton.Yes:
             event.accept()
         else:
@@ -105,4 +103,4 @@ class MainWindow(QMainWindow):
             self.load_products()
 
     def load_products(self):
-        ...
+        pass
