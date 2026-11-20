@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QPixmap 
 from PySide6.QtCore import Qt 
+from product_card import ProductCard
 
 class MainWindow(QMainWindow):
     def __init__(self, db, user_id=None, role_id=None, full_name=None):
@@ -20,6 +21,16 @@ class MainWindow(QMainWindow):
         
         self.setup_ui()
         self.load_products()
+    def open_selected_product_card(self):
+        current_row = self.table.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "Внимание", "Пожалуйста, выберите товар из списка (кликните по строке).")
+            return
+
+        product_id = int(self.table.item(current_row, 0).text()) # type: ignore
+        
+        card = ProductCard(product_id, self)
+        card.exec()
 
     def setup_ui(self):
         central_widget = QWidget()
@@ -76,7 +87,8 @@ class MainWindow(QMainWindow):
         self.table.horizontalHeader().setStretchLastSection(True)
         catalog_layout.addWidget(self.table)
         
-        self.btn_to_product = QPushButton("Перейти к карточке товара")
+        self.btn_to_product = QPushButton("Открыть карточку выбранного товара")
+        self.btn_to_product.clicked.connect(self.open_selected_product_card)
         self.btn_to_orders = QPushButton("Перейти к заказам")
         catalog_layout.addWidget(self.btn_to_product)
         catalog_layout.addWidget(self.btn_to_orders)
