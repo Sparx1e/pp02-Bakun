@@ -57,13 +57,18 @@ class MainWindow(QMainWindow):
         self.category_combo = QComboBox()
         self.category_combo.addItem("Все категории")
         self.category_combo.currentIndexChanged.connect(self.load_products)
-        
+
         self.load_categories()
+
+        self.sort_combo = QComboBox()
+        self.sort_combo.addItems(["По возрастанию", "По убыванию"])
+        self.sort_combo.setCurrentIndex(0)
+        self.sort_combo.currentIndexChanged.connect(self.load_products)
 
         filter_layout.addWidget(self.search_input)
         filter_layout.addWidget(self.category_combo)
-        
-        catalog_layout.addLayout(filter_layout)
+        filter_layout.addWidget(QLabel("Сортировка:"))
+        filter_layout.addWidget(self.sort_combo)
 
         self.table = QTableWidget()
         self.table.setColumnCount(4)
@@ -136,35 +141,52 @@ class MainWindow(QMainWindow):
     def refresh_catalog(self):
         self.load_products()
 
-    def load_products(self):
-        """Загружает или фильтрует товары с помощью ILIKE"""
-        if not hasattr(self, 'search_input'):
+    def load_products(self, *signal_args):
+        """Загружает товары с учётом поиска, категории и сортировки по цене."""
+        if not hasattr(self, "search_input") or not hasattr(self, "table"):
             return
 
         search = self.search_input.text().strip()
+        params = [f"%{search}%", f"%{search}%"]
+
+        query = """
+            SELECT product_id, name, COALESCE(description, ''), price
+            FROM products
+            WHERE (name ILIKE %s OR COALESCE(description, '') ILIKE %s)
+        """
+
+        if hasattr(self, "category_combo") and self.category_combo.currentIndex() > 0:
+            query += " AND category = %s"
+            params.append(self.category_combo.currentText())
+
+        direction = (
+            self.sort_combo.currentText()
+            if hasattr(self, "sort_combo")
+            else "По возрастанию"
+        )
+
+        if direction == "По возрастанию":
+            query += " ORDER BY price ASC, product_id ASC"
+        elif direction == "По убыванию":
+            query += " ORDER BY price DESC, product_id ASC"
+        else:
+            raise ValueError("Неизвестное направление сортировки")
+
         self.table.setRowCount(0)
-        
+
         try:
-            query = """
-                SELECT product_id, name, description, price
-                FROM products
-                WHERE name ILIKE %s OR description ILIKE %s
-                ORDER BY product_id;
-            """
-            search_pattern = f"%{search}%"
-            
-            self.db.cursor.execute(query, (search_pattern, search_pattern))
+            self.db.cursor.execute(query, tuple(params))
             products = self.db.cursor.fetchall()
-            
+
             self.table.setRowCount(len(products))
             for row_idx, product in enumerate(products):
                 self.table.setItem(row_idx, 0, QTableWidgetItem(str(product[0])))
                 self.table.setItem(row_idx, 1, QTableWidgetItem(product[1]))
                 self.table.setItem(row_idx, 2, QTableWidgetItem(product[2]))
                 self.table.setItem(row_idx, 3, QTableWidgetItem(str(product[3])))
-                
+
         except Exception as e:
-            print(f"Ошибка при загрузке товаров: {e}")
+            QMessageBox.critical(self, "Ошибка загрузки товаров", str(e))
 
     def load_categories(self):
         ...
