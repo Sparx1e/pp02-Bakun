@@ -1,7 +1,8 @@
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QLabel,
     QStackedWidget, QPushButton, QMessageBox,
-    QLineEdit, QTableWidget, QTableWidgetItem
+    QLineEdit, QTableWidget, QTableWidgetItem,
+    QComboBox, QHBoxLayout
 )
 from PySide6.QtGui import QPixmap 
 from PySide6.QtCore import Qt 
@@ -47,10 +48,22 @@ class MainWindow(QMainWindow):
             logo_label.setAlignment(Qt.AlignCenter) # type: ignore
             catalog_layout.addWidget(logo_label)
 
+        filter_layout = QHBoxLayout()
+
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Поиск по названию или описанию...")
-        self.search_input.textChanged.connect(self.load_products) # Подключаем сигнал
-        catalog_layout.addWidget(self.search_input)
+        self.search_input.textChanged.connect(self.load_products)
+        
+        self.category_combo = QComboBox()
+        self.category_combo.addItem("Все категории")
+        self.category_combo.currentIndexChanged.connect(self.load_products)
+        
+        self.load_categories()
+
+        filter_layout.addWidget(self.search_input)
+        filter_layout.addWidget(self.category_combo)
+        
+        catalog_layout.addLayout(filter_layout)
 
         self.table = QTableWidget()
         self.table.setColumnCount(4)
@@ -152,3 +165,6 @@ class MainWindow(QMainWindow):
                 
         except Exception as e:
             print(f"Ошибка при загрузке товаров: {e}")
+
+    def load_categories(self):
+        ...
