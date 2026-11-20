@@ -1,7 +1,7 @@
-from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QLabel, 
-                               QStackedWidget, QPushButton)
-from PySide6.QtCore import Qt
-
+from PySide6.QtWidgets import (
+    QMainWindow, QWidget, QVBoxLayout, QLabel,
+    QStackedWidget, QPushButton, QMessageBox
+)
 class MainWindow(QMainWindow):
     def __init__(self, user_id=None, role_id=None, full_name=None):
         super().__init__()
@@ -86,6 +86,19 @@ class MainWindow(QMainWindow):
         
         if index == 0:
             self.refresh_catalog()
+
+    def closeEvent(self, event):
+        reply = QMessageBox.warning(
+            self,
+            "Предупреждение",
+            "Вы уверены, что хотите выйти?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            event.accept()
+        else:
+            event.ignore()
 
     def refresh_catalog(self):
         if hasattr(self, "load_products"):
