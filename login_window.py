@@ -4,7 +4,6 @@ from PySide6.QtWidgets import (
 )
 from main import MainWindow
 
-
 def validate_login(raw: str):
     login = raw.strip()
     if not login:
@@ -13,12 +12,11 @@ def validate_login(raw: str):
         return None, "Логин должен содержать минимум 3 символа"
     return login, None
 
-
 class LoginWindow(QDialog):
     def __init__(self, db):
         super().__init__()
         self.db = db
-        self.main_window = None
+        self.main_window: MainWindow | None = None
         self.setWindowTitle("Авторизация — Мир киберспорта")
         self.setup_ui()
 
@@ -55,7 +53,7 @@ class LoginWindow(QDialog):
             return
 
         user_id, role_id, last_name, first_name, middle_name = row
-        
+
         parts = [last_name, first_name]
         if middle_name:
             parts.append(middle_name)
@@ -64,7 +62,7 @@ class LoginWindow(QDialog):
         role_names = {
             1: "Администратор",
             2: "Менеджер",
-            3: "Авторизованный пользователь"
+            3: "Авторизованный пользователь",
         }
         role_name = role_names.get(role_id, f"Роль {role_id}")
 

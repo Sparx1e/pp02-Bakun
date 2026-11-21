@@ -2,14 +2,26 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
-    QMessageBox, QPushButton, QStackedWidget, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget,
+    QMessageBox, QPushButton, QSpinBox, QStackedWidget,
+    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 from product_card import ProductCard
 
 PAGE_CATALOG = 0
 PAGE_CART = 1
 PAGE_ORDERS = 2
+
+COL_NAME = 0
+COL_QUANTITY = 1
+COL_PRICE = 2
+COL_SUM = 3
+COL_PRODUCT_ID = 4
+
+CAT_COL_ID = 0
+CAT_COL_NAME = 1
+CAT_COL_DESC = 2
+CAT_COL_PRICE = 3
+
 
 class MainWindow(QMainWindow):
     def __init__(
@@ -28,7 +40,7 @@ class MainWindow(QMainWindow):
         self.full_name = full_name or "Гость"
 
         self.setWindowTitle("Мир киберспорта")
-        self.resize(900, 640)
+        self.resize(960, 680)
 
         self.setup_ui()
         self.load_products()
@@ -44,7 +56,9 @@ class MainWindow(QMainWindow):
             "font-size: 24px; font-weight: bold; color: #458B8B;"
         )
 
-        user_info_label = QLabel(f"Вы вошли как: {self.full_name} ({self.role_name})")
+        user_info_label = QLabel(
+            f"Вы вошли как: {self.full_name} ({self.role_name})"
+        )
         user_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         main_layout.addWidget(title_label)
@@ -106,9 +120,12 @@ class MainWindow(QMainWindow):
         self.table.setHorizontalHeaderLabels(
             ["ID", "Наименование", "Описание", "Цена"]
         )
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.doubleClicked.connect(self.open_selected_product_card)
         layout.addWidget(self.table, 1)
 
         self.btn_to_product = QPushButton("Открыть карточку выбранного товара")
@@ -139,7 +156,7 @@ class MainWindow(QMainWindow):
         self.cart_table.setHorizontalHeaderLabels(
             ["Наименование", "Количество", "Цена", "Сумма", "ID"]
         )
-        self.cart_table.setColumnHidden(4, True)
+        self.cart_table.setColumnHidden(COL_PRODUCT_ID, True)
         self.cart_table.setSelectionBehavior(
             QTableWidget.SelectionBehavior.SelectRows
         )
@@ -152,15 +169,33 @@ class MainWindow(QMainWindow):
         self.total_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         layout.addWidget(self.total_label)
 
+        change_row = QHBoxLayout()
+        self.change_quantity_spin = QSpinBox()
+        self.change_quantity_spin.setMinimum(1)
+        self.change_quantity_spin.setMaximum(999)
+
+        self.change_quantity_button = QPushButton("Изменить количество")
+        self.change_quantity_button.clicked.connect(self.change_quantity)
+
+        change_row.addWidget(QLabel("Новое количество:"))
+        change_row.addWidget(self.change_quantity_spin)
+        change_row.addWidget(self.change_quantity_button)
+        change_row.addStretch(1)
+        layout.addLayout(change_row)
+
         btn_row = QHBoxLayout()
 
         self.remove_button = QPushButton("Удалить выбранный товар")
         self.remove_button.clicked.connect(self.remove_from_cart)
 
+        self.toggle_id_button = QPushButton("Показать / скрыть ID")
+        self.toggle_id_button.clicked.connect(self.toggle_product_id_column)
+
         self.confirm_button = QPushButton("Оформить заказ")
         self.confirm_button.clicked.connect(self.confirm_order)
 
         btn_row.addWidget(self.remove_button)
+        btn_row.addWidget(self.toggle_id_button)
         btn_row.addWidget(self.confirm_button)
         layout.addLayout(btn_row)
 
@@ -241,12 +276,12 @@ class MainWindow(QMainWindow):
         self.table.setRowCount(len(products))
         for row_idx, product in enumerate(products):
             pid, name, description, price = product
-            self.table.setItem(row_idx, 0, QTableWidgetItem(str(pid)))
-            self.table.setItem(row_idx, 1, QTableWidgetItem(name))
-            self.table.setItem(row_idx, 2, QTableWidgetItem(description))
-            self.table.setItem(row_idx, 3, QTableWidgetItem(str(price)))
+            self.table.setItem(row_idx, CAT_COL_ID, QTableWidgetItem(str(pid)))
+            self.table.setItem(row_idx, CAT_COL_NAME, QTableWidgetItem(name))
+            self.table.setItem(row_idx, CAT_COL_DESC, QTableWidgetItem(description))
+            self.table.setItem(row_idx, CAT_COL_PRICE, QTableWidgetItem(str(price)))
 
-    def open_selected_product_card(self) -> None:
+    def open_selected_product_card(self, *_) -> None:
         row = self.table.currentRow()
         if row < 0:
             QMessageBox.warning(
@@ -255,12 +290,22 @@ class MainWindow(QMainWindow):
             )
             return
 
-        product_id = int(self.table.item(row, 0).text()) # type: ignore
+        pid_item = self.table.item(row, CAT_COL_ID)
+        if pid_item is None:
+            return
+        try:
+            product_id = int(pid_item.text())
+        except ValueError:
+            QMessageBox.critical(self, "Ошибка", "Некорректный ID товара")
+            return
+
         card = ProductCard(product_id, self)
         card.exec()
 
-    def add_to_cart(self, name: str, quantity: int, price: float, product_id: int) -> None:
-        """Добавляет товар в QTableWidget. Дубликат (name+id) увеличивает количество."""
+    def add_to_cart(
+        self, name: str, quantity: int, price: float, product_id: int
+    ) -> None:
+        """Добавляет товар. Дубликат (name + product_id) увеличивает количество."""
         try:
             quantity = int(quantity)
             price = float(price)
@@ -268,31 +313,79 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Ошибка корзины", f"Неверные данные: {e}")
             return
 
+        if quantity <= 0:
+            QMessageBox.warning(self, "Корзина", "Количество должно быть > 0")
+            return
+
         existing_row = -1
         for row in range(self.cart_table.rowCount()):
-            name_item = self.cart_table.item(row, 0)
-            id_item = self.cart_table.item(row, 4)
-            if name_item and id_item and id_item.text() == str(product_id) \
-                    and name_item.text() == name:
+            name_item = self.cart_table.item(row, COL_NAME)
+            id_item = self.cart_table.item(row, COL_PRODUCT_ID)
+            if (
+                name_item is not None
+                and id_item is not None
+                and id_item.text() == str(product_id)
+                and name_item.text() == name
+            ):
                 existing_row = row
                 break
 
         if existing_row >= 0:
-            old_qty = int(self.cart_table.item(existing_row, 1).text()) # type: ignore
+            old_qty_item = self.cart_table.item(existing_row, COL_QUANTITY)
+            price_item = self.cart_table.item(existing_row, COL_PRICE)
+            old_qty = int(old_qty_item.text()) if old_qty_item else 0
+            stored_price = float(price_item.text()) if price_item else price
             new_qty = old_qty + quantity
-            self.cart_table.setItem(existing_row, 1, QTableWidgetItem(str(new_qty)))
+
             self.cart_table.setItem(
-                existing_row, 3, QTableWidgetItem(f"{new_qty * price:.2f}")
+                existing_row, COL_QUANTITY, QTableWidgetItem(str(new_qty))
+            )
+            self.cart_table.setItem(
+                existing_row, COL_SUM,
+                QTableWidgetItem(f"{new_qty * stored_price:.2f}")
             )
         else:
             row = self.cart_table.rowCount()
             self.cart_table.insertRow(row)
-            self.cart_table.setItem(row, 0, QTableWidgetItem(str(name)))
-            self.cart_table.setItem(row, 1, QTableWidgetItem(str(quantity)))
-            self.cart_table.setItem(row, 2, QTableWidgetItem(f"{price:.2f}"))
-            self.cart_table.setItem(row, 3, QTableWidgetItem(f"{quantity * price:.2f}"))
-            self.cart_table.setItem(row, 4, QTableWidgetItem(str(product_id)))
+            self.cart_table.setItem(row, COL_NAME, QTableWidgetItem(str(name)))
+            self.cart_table.setItem(row, COL_QUANTITY, QTableWidgetItem(str(quantity)))
+            self.cart_table.setItem(row, COL_PRICE, QTableWidgetItem(f"{price:.2f}"))
+            self.cart_table.setItem(
+                row, COL_SUM, QTableWidgetItem(f"{quantity * price:.2f}")
+            )
+            self.cart_table.setItem(
+                row, COL_PRODUCT_ID, QTableWidgetItem(str(product_id))
+            )
 
+        self.update_total()
+
+    def change_quantity(self) -> None:
+        row = self.cart_table.currentRow()
+        if row < 0:
+            QMessageBox.warning(
+                self, "Внимание",
+                "Выберите товар в корзине, чтобы изменить количество",
+            )
+            return
+
+        price_item = self.cart_table.item(row, COL_PRICE)
+        if price_item is None:
+            QMessageBox.critical(self, "Ошибка", "Не удалось прочитать цену товара")
+            return
+        try:
+            price = float(price_item.text())
+        except ValueError:
+            QMessageBox.critical(self, "Ошибка", "Некорректная цена в корзине")
+            return
+
+        new_quantity = int(self.change_quantity_spin.value())
+
+        self.cart_table.setItem(
+            row, COL_QUANTITY, QTableWidgetItem(str(new_quantity))
+        )
+        self.cart_table.setItem(
+            row, COL_SUM, QTableWidgetItem(f"{new_quantity * price:.2f}")
+        )
         self.update_total()
 
     def remove_from_cart(self) -> None:
@@ -308,17 +401,22 @@ class MainWindow(QMainWindow):
     def update_total(self) -> None:
         total = 0.0
         for row in range(self.cart_table.rowCount()):
-            item = self.cart_table.item(row, 3)
-            if item is not None:
-                try:
-                    total += float(item.text())
-                except ValueError:
-                    pass
+            item = self.cart_table.item(row, COL_SUM)
+            if item is None:
+                continue
+            try:
+                total += float(item.text())
+            except ValueError:
+                continue
 
         if self.cart_table.rowCount() == 0:
             self.total_label.setText("Итого: 0 ₽")
         else:
             self.total_label.setText(f"Итого: {total:.0f} ₽")
+
+    def toggle_product_id_column(self) -> None:
+        current = self.cart_table.isColumnHidden(COL_PRODUCT_ID)
+        self.cart_table.setColumnHidden(COL_PRODUCT_ID, not current)
 
     def confirm_order(self) -> None:
         if self.cart_table.rowCount() == 0:
@@ -328,5 +426,5 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self, "Оформление заказа",
             "Корзина заполнена.\n"
-            "Сохранение заказа в БД будет реализовано на следующей паре (ПТ 21).",
+            "Сохранение заказа в БД будет реализовано на следующей паре (ПП 21).",
         )

@@ -1,6 +1,4 @@
 import psycopg
-
-
 class Database:
     """Тонкая обёртка над psycopg3 с удобными методами запросов."""
 

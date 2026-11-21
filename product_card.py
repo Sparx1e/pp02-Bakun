@@ -1,17 +1,21 @@
 from pathlib import Path
 import shutil
 import uuid
+
+import psycopg
 from PySide6.QtCore import QStandardPaths, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QFileDialog, QLabel, QMessageBox,
     QPushButton, QSpinBox, QVBoxLayout,
 )
-import psycopg
+
 from resource_utils import resource_path
 
 
-def load_product_pixmap(image_path, fallback: str = "images/picture.png") -> QPixmap:
+def load_product_pixmap(
+    image_path, fallback: str = "images/picture.png"
+) -> QPixmap:
     pixmap = QPixmap(str(resource_path(image_path))) if image_path else QPixmap()
     if pixmap.isNull():
         pixmap = QPixmap(str(resource_path(fallback)))
@@ -53,8 +57,7 @@ class ProductCard(QDialog):
         self.description_label = QLabel("Описание: ...")
         self.description_label.setWordWrap(True)
 
-        self.size_combo = QComboBox()
-        self.variant_combo = self.size_combo
+        self.variant_combo = QComboBox()
         self.variant_combo.currentTextChanged.connect(self.on_variant_changed)
 
         self.quantity_spin = QSpinBox()
@@ -84,7 +87,9 @@ class ProductCard(QDialog):
         try:
             product = self.db.fetch_product(product_id)
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка БД", f"Ошибка при загрузке товара: {e}")
+            QMessageBox.critical(
+                self, "Ошибка БД", f"Ошибка при загрузке товара: {e}"
+            )
             return
 
         if product is None:
@@ -102,14 +107,19 @@ class ProductCard(QDialog):
 
         pixmap = load_product_pixmap(image_path)
         self.image_label.setPixmap(
-            pixmap.scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation) # type: ignore
+            pixmap.scaled(
+                200, 200,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
         )
 
-        # варианты исполнения из stock_items
         try:
             stock = self.db.fetch_product_stock(product_id)
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка БД", f"Ошибка загрузки вариантов: {e}")
+            QMessageBox.critical(
+                self, "Ошибка БД", f"Ошибка загрузки вариантов: {e}"
+            )
             stock = []
 
         self.variant_combo.blockSignals(True)
@@ -152,7 +162,9 @@ class ProductCard(QDialog):
             return
 
         if QPixmap(file_path).isNull():
-            QMessageBox.warning(self, "Изображение", "Файл не является изображением")
+            QMessageBox.warning(
+                self, "Изображение", "Файл не является изображением"
+            )
             return
 
         base = QStandardPaths.writableLocation(
@@ -181,7 +193,11 @@ class ProductCard(QDialog):
 
         pixmap = QPixmap(str(target))
         self.image_label.setPixmap(
-            pixmap.scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation) # type: ignore
+            pixmap.scaled(
+                200, 200,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
         )
         QMessageBox.information(self, "Готово", "Изображение товара обновлено")
 
@@ -199,11 +215,16 @@ class ProductCard(QDialog):
         display_name = f"{name} ({variant})" if variant else name
 
         try:
-            self.main_window.add_to_cart(display_name, quantity, price, product_id)
+            self.main_window.add_to_cart(
+                display_name, quantity, price, product_id
+            )
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Не удалось добавить товар: {e}")
+            QMessageBox.critical(
+                self, "Ошибка", f"Не удалось добавить товар: {e}"
+            )
             return
 
         QMessageBox.information(
-            self, "Корзина", f"«{display_name}» × {quantity} добавлен в корзину"
+            self, "Корзина",
+            f"«{display_name}» × {quantity} добавлен в корзину",
         )
