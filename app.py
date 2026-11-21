@@ -5,6 +5,8 @@ from login_window import LoginWindow
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setApplicationName("PP02")
+    app.setOrganizationName("PP02")
 
     db = Database()
     if db.connect():
