@@ -1,17 +1,17 @@
-from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QLabel, QComboBox, QPushButton,
-    QMessageBox, QSpinBox, QFileDialog
-)
-from PySide6.QtGui import QPixmap
-from PySide6.QtCore import Qt, QStandardPaths
+from pathlib import Path
 import shutil
 import uuid
-from pathlib import Path
+from PySide6.QtCore import QStandardPaths, Qt
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import (
+    QComboBox, QDialog, QFileDialog, QLabel, QMessageBox,
+    QPushButton, QSpinBox, QVBoxLayout,
+)
 import psycopg
 from resource_utils import resource_path
 
 
-def load_product_pixmap(image_path, fallback="images/picture.png"):
+def load_product_pixmap(image_path, fallback: str = "images/picture.png") -> QPixmap:
     pixmap = QPixmap(str(resource_path(image_path))) if image_path else QPixmap()
     if pixmap.isNull():
         pixmap = QPixmap(str(resource_path(fallback)))
@@ -22,16 +22,21 @@ def load_product_pixmap(image_path, fallback="images/picture.png"):
 
 
 class ProductCard(QDialog):
-    def __init__(self, product_id, parent=None):
+    def __init__(self, product_id: int, parent=None):
         super().__init__(parent)
         self.product_id = product_id
+        self.main_window = parent
         self.db = parent.db if parent is not None else None
+        self.base_price: float = 0.0
+        self.current_price: float = 0.0
+        self.stock_map: dict[str, tuple[int, float]] = {}
+
         self.setWindowTitle("Карточка товара — Мир киберспорта")
-        self.resize(300, 500)
+        self.resize(320, 560)
         self.setup_ui()
         self.load_product(product_id)
 
-    def setup_ui(self):
+    def setup_ui(self) -> None:
         layout = QVBoxLayout(self)
 
         self.image_label = QLabel()
@@ -46,10 +51,11 @@ class ProductCard(QDialog):
 
         self.price_label = QLabel("Цена: ...")
         self.description_label = QLabel("Описание: ...")
+        self.description_label.setWordWrap(True)
 
         self.size_combo = QComboBox()
-        self.size_combo.addItems(["Чёрный", "Белый", "Красный"])
         self.variant_combo = self.size_combo
+        self.variant_combo.currentTextChanged.connect(self.on_variant_changed)
 
         self.quantity_spin = QSpinBox()
         self.quantity_spin.setMinimum(1)
@@ -64,59 +70,74 @@ class ProductCard(QDialog):
             self.name_label,
             self.price_label,
             self.description_label,
-            self.size_combo,
+            self.variant_combo,
             self.quantity_spin,
             self.add_button,
         ):
             layout.addWidget(widget)
 
-    def load_product(self, product_id):
-        """Загружает данные о товаре из БД и заполняет виджеты."""
+    def load_product(self, product_id: int) -> None:
         if not self.db:
             QMessageBox.critical(self, "Ошибка", "Нет подключения к БД")
             return
 
         try:
-            self.db.cursor.execute("""
-                SELECT p.name, p.price, p.description, p.image_path,
-                       COALESCE(SUM(si.quantity), 0) AS total_quantity
-                FROM products p
-                LEFT JOIN stock_items si ON p.product_id = si.product_id
-                WHERE p.product_id = %s
-                GROUP BY p.product_id
-            """, (product_id,))
-            product = self.db.cursor.fetchone()
-
-            if product is None:
-                QMessageBox.critical(self, "Ошибка", "Товар не найден")
-                self.reject()
-                return
-
-            name, price, description, image_path, total_quantity = product
-
-            self.name_label.setText(name)
-            self.price_label.setText(f"Цена: {price} руб.")
-            self.description_label.setText(description or "Описание отсутствует")
-
-            pixmap = load_product_pixmap(image_path)
-            self.image_label.setPixmap(
-                pixmap.scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation) # type: ignore
-            )
-
-            self.quantity_spin.setMaximum(int(total_quantity))
-
-            if total_quantity == 0:
-                self.add_button.setEnabled(False)
-                self.add_button.setText("Нет в наличии")
-            else:
-                self.add_button.setEnabled(True)
-                self.add_button.setText("В корзину")
-
+            product = self.db.fetch_product(product_id)
         except Exception as e:
             QMessageBox.critical(self, "Ошибка БД", f"Ошибка при загрузке товара: {e}")
+            return
 
-    def load_image(self):
-        """Выбор, копирование изображения и обновление пути в БД."""
+        if product is None:
+            QMessageBox.critical(self, "Ошибка", "Товар не найден")
+            self.reject()
+            return
+
+        name, price, description, image_path = product
+        self.base_price = float(price)
+        self.current_price = float(price)
+
+        self.name_label.setText(name)
+        self.price_label.setText(f"Цена: {price} руб.")
+        self.description_label.setText(description or "Описание отсутствует")
+
+        pixmap = load_product_pixmap(image_path)
+        self.image_label.setPixmap(
+            pixmap.scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation) # type: ignore
+        )
+
+        # варианты исполнения из stock_items
+        try:
+            stock = self.db.fetch_product_stock(product_id)
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка БД", f"Ошибка загрузки вариантов: {e}")
+            stock = []
+
+        self.variant_combo.blockSignals(True)
+        self.variant_combo.clear()
+        self.stock_map.clear()
+        for variant, qty, vprice in stock:
+            self.variant_combo.addItem(variant)
+            self.stock_map[variant] = (int(qty), float(vprice))
+        self.variant_combo.blockSignals(False)
+
+        if self.variant_combo.count() > 0:
+            self.on_variant_changed(self.variant_combo.currentText())
+        else:
+            self.add_button.setEnabled(False)
+            self.add_button.setText("Нет в наличии")
+            self.quantity_spin.setEnabled(False)
+
+    def on_variant_changed(self, variant: str) -> None:
+        qty, vprice = self.stock_map.get(variant, (0, self.base_price))
+        self.current_price = vprice
+        self.price_label.setText(f"Цена: {vprice:.0f} руб.")
+
+        self.quantity_spin.setMaximum(max(qty, 1))
+        self.quantity_spin.setEnabled(qty > 0)
+        self.add_button.setEnabled(qty > 0)
+        self.add_button.setText("В корзину" if qty > 0 else "Нет в наличии")
+
+    def load_image(self) -> None:
         if not self.db or not self.db.connection:
             QMessageBox.critical(self, "Ошибка", "Нет подключения к БД")
             return
@@ -125,7 +146,7 @@ class ProductCard(QDialog):
             self,
             "Выберите изображение для товара",
             "",
-            "Images (*.png *.jpg *.jpeg)"
+            "Images (*.png *.jpg *.jpeg)",
         )
         if not file_path:
             return
@@ -139,39 +160,23 @@ class ProductCard(QDialog):
         )
         if not base:
             QMessageBox.critical(
-                self,
-                "Ошибка",
-                "Не удалось определить каталог для сохранения изображений"
+                self, "Ошибка",
+                "Не удалось определить каталог для сохранения изображений",
             )
             return
 
-        target = Path(base) / "images" / (
-            uuid.uuid4().hex + Path(file_path).suffix
-        )
+        target = Path(base) / "images" / (uuid.uuid4().hex + Path(file_path).suffix)
 
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(file_path, target)
-
-            with self.db.connection.cursor() as cursor:
-                cursor.execute(
-                    "UPDATE products SET image_path = %s WHERE product_id = %s",
-                    (str(target), self.product_id)
-                )
-                if cursor.rowcount != 1:
-                    raise ValueError("Товар не найден")
-
-            self.db.connection.commit()
-
+            self.db.update_product_image(self.product_id, str(target))
         except (OSError, psycopg.Error, ValueError) as error:
-            self.db.connection.rollback()
+            if self.db.connection:
+                self.db.connection.rollback()
             if target.exists():
                 target.unlink()
-            QMessageBox.critical(
-                self,
-                "Изображение не сохранено",
-                str(error)
-            )
+            QMessageBox.critical(self, "Изображение не сохранено", str(error))
             return
 
         pixmap = QPixmap(str(target))
@@ -180,7 +185,25 @@ class ProductCard(QDialog):
         )
         QMessageBox.information(self, "Готово", "Изображение товара обновлено")
 
-    def add_selected_to_cart(self):
+    def add_selected_to_cart(self) -> None:
+        if self.main_window is None:
+            QMessageBox.critical(self, "Ошибка", "Нет ссылки на главное окно")
+            return
+
+        variant = self.variant_combo.currentText().strip()
+        quantity = self.quantity_spin.value()
+        name = self.name_label.text()
+        price = self.current_price
+        product_id = self.product_id
+
+        display_name = f"{name} ({variant})" if variant else name
+
+        try:
+            self.main_window.add_to_cart(display_name, quantity, price, product_id)
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось добавить товар: {e}")
+            return
+
         QMessageBox.information(
-            self, "Этап разработки", "Корзина будет подключена в РТ 19"
+            self, "Корзина", f"«{display_name}» × {quantity} добавлен в корзину"
         )

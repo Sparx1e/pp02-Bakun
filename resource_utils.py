@@ -1,12 +1,13 @@
 from pathlib import Path
 import sys
 
-def resource_path(relative):
+
+def resource_path(relative) -> Path:
     path = Path(relative)
     if path.is_absolute():
         return path
     if hasattr(sys, "_MEIPASS"):
-        base = Path(sys._MEIPASS) # type: ignore
+        base = Path(sys._MEIPASS)  # type: ignore
     else:
         base = Path(__file__).resolve().parent
         if base.name == "src":
