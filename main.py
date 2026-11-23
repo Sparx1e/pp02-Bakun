@@ -206,7 +206,30 @@ class MainWindow(QMainWindow):
     def _build_orders_page(self) -> None:
         self.orders_page = QWidget()
         layout = QVBoxLayout(self.orders_page)
-        layout.addWidget(QLabel("Заказы клиентов — Мир киберспорта"))
+
+        orders_title = QLabel("Заказы клиентов — Мир киберспорта")
+        orders_title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        layout.addWidget(orders_title)
+
+        self.orders_table = QTableWidget()
+        self.orders_table.setColumnCount(4)
+        self.orders_table.setHorizontalHeaderLabels(
+            ["Дата", "ФИО клиента", "Сумма", "Статус"]
+        )
+        self.orders_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+        self.orders_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+        self.orders_table.horizontalHeader().setStretchLastSection(True)
+
+        self.orders_table.cellClicked.connect(self.on_order_click)
+        layout.addWidget(self.orders_table, 1)
+
+        self.btn_refresh_orders = QPushButton("Обновить список заказов")
+        self.btn_refresh_orders.clicked.connect(self.load_orders)
+        layout.addWidget(self.btn_refresh_orders)
 
         self.btn_add_order = QPushButton("Добавить заказ")
         self.btn_delete_order = QPushButton("Удалить заказ")
@@ -224,15 +247,23 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.guest_label)
 
         self.stacked_widget.addWidget(self.orders_page)
-    remove_from_cart = None
-    toggle_product_id_column = None
-    confirm_order = None
-    change_quantity = None
 
-    def switch_page(self, PAGE_ORDERS):
-        ...
-    open_selected_product_card = None
-    load_products = None
+    def switch_page(self, index: int) -> None:
+        self.stacked_widget.setCurrentIndex(index)
+
+        titles = [
+            "Мир киберспорта — Каталог",
+            "Мир киберспорта — Корзина",
+            "Мир киберспорта — Заказы",
+        ]
+        self.setWindowTitle(titles[index])
+
+        if index == PAGE_CATALOG:
+            self.refresh_catalog()
+        elif index == PAGE_CART:
+            self.update_total()
+        elif index == PAGE_ORDERS:
+    self.load_orders() # type: ignore
 
     def _load_categories_into_combo(self):
         ...
@@ -240,6 +271,20 @@ class MainWindow(QMainWindow):
 
     def setup_role_interface(self):
         ...
+    load_orders = None
+    on_order_click = None
+    confirm_order = None
+    toggle_product_id_column = None
+    remove_from_cart = None
+    change_quantity = None
+
+    def refresh_catalog(self):
+        ...
+
+    def update_total(self):
+        ...
+    open_selected_product_card = None
+    load_products = None
 
 def setup_role_interface(self) -> None:
     """Разграничение доступа в зависимости от role_id."""
@@ -575,5 +620,49 @@ def setup_role_interface(self) -> None:
                 f"Ошибка при сохранении заказа: {e}",
             )
 
-    def setup_role_interface(self):
-        ...
+    def load_orders(self) -> None:
+        if not hasattr(self, "orders_table"):
+            return
+
+        try:
+            orders = self.db.fetch_orders()
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Ошибка загрузки заказов", str(e)
+            )
+            return
+
+        self.orders_table.setRowCount(0)
+        self.orders_table.setRowCount(len(orders))
+
+        for row, order in enumerate(orders):
+            order_id, order_date, full_name, total, status = order
+
+            date_item = QTableWidgetItem(str(order_date))
+            date_item.setData(Qt.ItemDataRole.UserRole, order_id)
+
+            self.orders_table.setItem(row, 0, date_item)
+            self.orders_table.setItem(row, 1, QTableWidgetItem(str(full_name)))
+            self.orders_table.setItem(
+                row, 2, QTableWidgetItem(f"{float(total):.2f} ₽")
+            )
+            self.orders_table.setItem(row, 3, QTableWidgetItem(str(status)))
+
+        def on_order_click(self, row: int, column: int) -> None:
+            item = self.orders_table.item(row, 0)
+            if item is None:
+                return
+
+            order_id = item.data(Qt.ItemDataRole.UserRole)
+        if order_id is None:
+            return
+
+        self.load_order_details(int(order_id))
+
+    def load_order_details(self, order_id: int) -> None:
+        QMessageBox.information(
+            self,
+            "Состав заказа",
+            f"Выбран заказ №{order_id}.\n"
+            "Состав заказа будет реализован в РТ 37.",
+        )

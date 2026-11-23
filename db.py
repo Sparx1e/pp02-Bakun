@@ -116,3 +116,32 @@ class Database:
             if cur.rowcount != 1:
                 raise ValueError("Товар не найден")
         self.connection.commit()
+
+    def fetch_orders(self):
+        """Возвращает список заказов: (order_id, order_date, full_name, total, status)."""
+        assert self.cursor is not None
+        self.cursor.execute(
+            """
+            SELECT
+                o.order_id,
+                o.order_date,
+                COALESCE(
+                    NULLIF(CONCAT_WS(' ', u.last_name, u.first_name, u.middle_name), ''),
+                    'Пользователь удалён'
+                ) AS full_name,
+                COALESCE(SUM(oi.quantity * oi.price), 0) AS total,
+                COALESCE(o.status, 'Новый') AS status
+            FROM orders o
+            LEFT JOIN users u ON o.user_id = u.user_id
+            LEFT JOIN order_items oi ON o.order_id = oi.order_id
+            GROUP BY
+                o.order_id,
+                o.order_date,
+                u.last_name,
+                u.first_name,
+                u.middle_name,
+                o.status
+            ORDER BY o.order_date DESC, o.order_id DESC
+            """
+        )
+        return self.cursor.fetchall()
