@@ -44,6 +44,7 @@ class MainWindow(QMainWindow):
         self.resize(960, 680)
 
         self.setup_ui()
+        self.setup_role_interface()
         self.load_products()
 
     def setup_ui(self) -> None:
@@ -206,10 +207,55 @@ class MainWindow(QMainWindow):
         self.orders_page = QWidget()
         layout = QVBoxLayout(self.orders_page)
         layout.addWidget(QLabel("Заказы клиентов"))
-        layout.addWidget(
-            QLabel("Раздел будет реализован на следующей паре (сохранение в БД).")
-        )
+
+        self.role_stack = QStackedWidget()
+        self.manager_page = QWidget()
+        self.admin_page = QWidget()
+
+        manager_layout = QVBoxLayout()
+        manager_layout.addWidget(QLabel("Страница Менеджера: управление заказами"))
+        self.btn_add_order = QPushButton("Добавить заказ")
+        self.btn_delete_order = QPushButton("Удалить заказ")
+        manager_layout.addWidget(self.btn_add_order)
+        manager_layout.addWidget(self.btn_delete_order)
+        self.manager_page.setLayout(manager_layout)
+
+        admin_layout = QVBoxLayout()
+        admin_layout.addWidget(QLabel("Страница Администратора: редактирование заказов"))
+        self.btn_edit_order = QPushButton("Редактировать заказ")
+        admin_layout.addWidget(self.btn_edit_order)
+        self.admin_page.setLayout(admin_layout)
+
+        self.role_stack.addWidget(self.manager_page)
+        self.role_stack.addWidget(self.admin_page)
+
+        layout.addWidget(self.role_stack)
+
+        self.guest_label = QLabel("Доступ к управлению заказами имеют только менеджеры и администраторы.")
+        self.guest_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.guest_label.hide()
+        layout.addWidget(self.guest_label)
+
         self.stacked_widget.addWidget(self.orders_page)
+
+        def setup_role_interface(self) -> None:"""Разграничение доступа в зависимости от role_id."""
+        if self.role_id == 1:        
+            self.role_stack.show()
+            self.guest_label.hide()
+            self.role_stack.setCurrentIndex(1)  
+            self.btn_edit_order.show()
+            self.btn_add_order.hide()        
+            self.btn_delete_order.hide()
+        elif self.role_id == 2:   
+            self.role_stack.show()
+            self.guest_label.hide()
+            self.role_stack.setCurrentIndex(0)  
+            self.btn_edit_order.hide()
+            self.btn_add_order.show()
+            self.btn_delete_order.show()
+        else:                        
+            self.role_stack.hide()
+            self.guest_label.show()
 
     def go_back(self) -> None:
         if self.stacked_widget.currentIndex() != PAGE_CATALOG:
@@ -522,3 +568,6 @@ class MainWindow(QMainWindow):
                 "Ошибка",
                 f"Ошибка при сохранении заказа: {e}",
             )
+
+    def setup_role_interface(self):
+        ...

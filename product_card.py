@@ -73,10 +73,11 @@ def delete_product(self) -> None:
         QMessageBox.critical(self, "Ошибка", f"Ошибка: {e}")
 
 class ProductCard(QDialog):
-    def __init__(self, product_id: int, parent=None):
+    def __init__(self, product_id: int, role_id, parent=None):
         super().__init__(parent)
         self.product_id = product_id
         self.main_window = parent
+        self.role_id = role_id
         self.db = parent.db if parent is not None else None
         self.base_price: float = 0.0
         self.current_price: float = 0.0
@@ -89,6 +90,7 @@ class ProductCard(QDialog):
 
     def setup_ui(self) -> None:
         layout = QVBoxLayout(self)
+        
 
         self.image_label = QLabel()
         self.image_label.setPixmap(load_product_pixmap(None))
@@ -113,6 +115,11 @@ class ProductCard(QDialog):
 
         self.add_button = QPushButton("В корзину")
         self.add_button.clicked.connect(self.add_selected_to_cart)
+
+        self.delete_button = QPushButton("Удалить товар")
+        self.delete_button.clicked.connect(self.delete_product)
+        if self.role_id != 1:         
+            self.delete_button.hide()
 
         for widget in (
             self.image_label,
