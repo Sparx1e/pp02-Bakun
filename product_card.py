@@ -24,6 +24,53 @@ def load_product_pixmap(
         pixmap.fill(Qt.GlobalColor.lightGray)
     return pixmap
 
+def delete_product(self) -> None:
+    """Удаление товара из БД с подтверждением и обработкой FK."""
+    reply = QMessageBox.question(
+        self,
+        "Удаление товара",
+        f"Вы уверены, что хотите удалить «{self.name_label.text()}»?",
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        QMessageBox.StandardButton.No,
+    )
+    if reply != QMessageBox.StandardButton.Yes:
+        return
+
+    if not self.db or not self.db.connection:
+        QMessageBox.critical(self, "Ошибка", "Нет подключения к БД")
+        return
+
+    try:
+        with self.db.connection.cursor() as cur:
+            cur.execute(
+                "DELETE FROM stock_items WHERE product_id = %s",
+                (self.product_id,),
+            )
+            cur.execute(
+                "DELETE FROM products WHERE product_id = %s",
+                (self.product_id,),
+            )
+            if cur.rowcount == 0:
+                raise ValueError("Товар не найден")
+
+        self.db.connection.commit()
+        QMessageBox.information(self, "Успех", "Товар удалён")
+
+        if self.main_window is not None:
+            self.main_window.load_products()
+
+        self.accept()
+
+    except psycopg.errors.ForeignKeyViolation:
+        self.db.connection.rollback()
+        QMessageBox.critical(
+            self,
+            "Ошибка",
+            "Товар нельзя удалить: он есть в заказах",
+        )
+    except Exception as e:
+        self.db.connection.rollback()
+        QMessageBox.critical(self, "Ошибка", f"Ошибка: {e}")
 
 class ProductCard(QDialog):
     def __init__(self, product_id: int, parent=None):
@@ -76,7 +123,8 @@ class ProductCard(QDialog):
             self.variant_combo,
             self.quantity_spin,
             self.add_button,
-        ):
+            self.delete_button,
+            ):
             layout.addWidget(widget)
 
     def load_product(self, product_id: int) -> None:
@@ -136,6 +184,8 @@ class ProductCard(QDialog):
             self.add_button.setEnabled(False)
             self.add_button.setText("Нет в наличии")
             self.quantity_spin.setEnabled(False)
+            self.delete_button = QPushButton("Удалить")
+        self.delete_button.clicked.connect(self.delete_product)
 
     def on_variant_changed(self, variant: str) -> None:
         qty, vprice = self.stock_map.get(variant, (0, self.base_price))
@@ -228,3 +278,4 @@ class ProductCard(QDialog):
             self, "Корзина",
             f"«{display_name}» × {quantity} добавлен в корзину",
         )
+    delete_product = None
