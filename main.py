@@ -1,12 +1,12 @@
+from datetime import date
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QSpinBox, QStackedWidget,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,QDialog
 )
 from product_card import ProductCard
-from datetime import date
 
 PAGE_CATALOG = 0
 PAGE_CART = 1
@@ -666,3 +666,75 @@ def setup_role_interface(self) -> None:
             f"Выбран заказ №{order_id}.\n"
             "Состав заказа будет реализован в РТ 37.",
         )
+    class AddOrderDialog(QDialog):"""Диалог добавления заказа (менеджер/администратор)."""
+
+    def __init__(self, db, parent=None):
+        super().__init__(parent) # pyright: ignore
+        self.db = db
+        self.setWindowTitle("Добавить заказ — Мир киберспорта")
+        self.resize(420, 260)
+        self.setup_ui()
+
+    def setup_ui(self) -> None:
+        layout = QVBoxLayout(self)
+
+        layout.addWidget(QLabel("Клиент:"))
+        self.client_combo = QComboBox()
+        cursor = self.db.cursor
+        cursor.execute(
+            """
+            SELECT user_id, CONCAT_WS(' ', last_name, first_name, middle_name)
+            FROM users
+            WHERE role_id = 3
+            ORDER BY last_name, first_name
+            """
+        )
+        for user_id, full_name in cursor.fetchall():
+            self.client_combo.addItem(full_name, user_id)
+        layout.addWidget(self.client_combo)
+
+        layout.addWidget(QLabel("Статус:"))
+        self.status_combo = QComboBox()
+        self.status_combo.addItems(["Новый", "В обработке", "Завершён"])
+        self.status_combo.setCurrentIndex(0)
+        layout.addWidget(self.status_combo)
+
+        btn_layout = QHBoxLayout()
+        self.save_button = QPushButton("Сохранить")
+        self.save_button.clicked.connect(self.save_order)
+        self.cancel_button = QPushButton("Отмена")
+        self.cancel_button.clicked.connect(self.reject)
+        btn_layout.addWidget(self.save_button)
+        btn_layout.addWidget(self.cancel_button)
+        layout.addLayout(btn_layout)
+
+    def save_order(self) -> None:
+        cursor = self.db.cursor
+        try:
+            user_id = self.client_combo.currentData()
+            status = self.status_combo.currentText()
+
+            if user_id is None:
+                raise ValueError("Не выбран клиент")
+
+            cursor.execute(
+                """
+                INSERT INTO orders (order_date, user_id, status)
+                VALUES (%s, %s, %s)
+                RETURNING order_id
+                """,
+                (date.today(), user_id, status),
+            )
+            order_id = cursor.fetchone()[0]
+            self.db.connection.commit()
+
+            QMessageBox.information(
+                self, "Успех", f"Заказ №{order_id} добавлен"
+            )
+            self.accept()
+        except Exception as e:
+            if self.db.connection:
+                self.db.connection.rollback()
+            QMessageBox.critical(
+                self, "Ошибка", f"Не удалось сохранить заказ:\n{e}"
+            )
