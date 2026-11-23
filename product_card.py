@@ -118,7 +118,7 @@ class ProductCard(QDialog):
 
         self.delete_button = QPushButton("Удалить товар")
         self.delete_button.clicked.connect(self.delete_product)
-        if self.role_id != 1:         
+        if self.role_id != 1:        
             self.delete_button.hide()
 
         for widget in (

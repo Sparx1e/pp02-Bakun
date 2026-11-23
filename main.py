@@ -45,7 +45,7 @@ class MainWindow(QMainWindow):
 
         self.setup_ui()
         self.setup_role_interface()
-        self.load_products()
+        self.load_products() # type: ignore
 
     def setup_ui(self) -> None:
         central_widget = QWidget()
@@ -206,56 +206,62 @@ class MainWindow(QMainWindow):
     def _build_orders_page(self) -> None:
         self.orders_page = QWidget()
         layout = QVBoxLayout(self.orders_page)
-        layout.addWidget(QLabel("Заказы клиентов"))
+        layout.addWidget(QLabel("Заказы клиентов — Мир киберспорта"))
 
-        self.role_stack = QStackedWidget()
-        self.manager_page = QWidget()
-        self.admin_page = QWidget()
-
-        manager_layout = QVBoxLayout()
-        manager_layout.addWidget(QLabel("Страница Менеджера: управление заказами"))
         self.btn_add_order = QPushButton("Добавить заказ")
         self.btn_delete_order = QPushButton("Удалить заказ")
-        manager_layout.addWidget(self.btn_add_order)
-        manager_layout.addWidget(self.btn_delete_order)
-        self.manager_page.setLayout(manager_layout)
-
-        admin_layout = QVBoxLayout()
-        admin_layout.addWidget(QLabel("Страница Администратора: редактирование заказов"))
         self.btn_edit_order = QPushButton("Редактировать заказ")
-        admin_layout.addWidget(self.btn_edit_order)
-        self.admin_page.setLayout(admin_layout)
 
-        self.role_stack.addWidget(self.manager_page)
-        self.role_stack.addWidget(self.admin_page)
+        layout.addWidget(self.btn_add_order)
+        layout.addWidget(self.btn_delete_order)
+        layout.addWidget(self.btn_edit_order)
 
-        layout.addWidget(self.role_stack)
-
-        self.guest_label = QLabel("Доступ к управлению заказами имеют только менеджеры и администраторы.")
+        self.guest_label = QLabel(
+            "Доступ к управлению заказами имеют только менеджеры и администраторы."
+        )
         self.guest_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.guest_label.hide()
         layout.addWidget(self.guest_label)
 
         self.stacked_widget.addWidget(self.orders_page)
+    remove_from_cart = None
+    toggle_product_id_column = None
+    confirm_order = None
+    change_quantity = None
 
-        def setup_role_interface(self) -> None:"""Разграничение доступа в зависимости от role_id."""
-        if self.role_id == 1:        
-            self.role_stack.show()
-            self.guest_label.hide()
-            self.role_stack.setCurrentIndex(1)  
-            self.btn_edit_order.show()
-            self.btn_add_order.hide()        
-            self.btn_delete_order.hide()
-        elif self.role_id == 2:   
-            self.role_stack.show()
-            self.guest_label.hide()
-            self.role_stack.setCurrentIndex(0)  
-            self.btn_edit_order.hide()
-            self.btn_add_order.show()
-            self.btn_delete_order.show()
-        else:                        
-            self.role_stack.hide()
-            self.guest_label.show()
+    def switch_page(self, PAGE_ORDERS):
+        ...
+    open_selected_product_card = None
+    load_products = None
+
+    def _load_categories_into_combo(self):
+        ...
+    go_back = None
+
+    def setup_role_interface(self):
+        ...
+
+def setup_role_interface(self) -> None:
+    """Разграничение доступа в зависимости от role_id."""
+    if self.role_id == 1:          
+        self.btn_add_order.show()
+        self.btn_delete_order.show()
+        self.btn_edit_order.show()
+        self.guest_label.hide()
+    elif self.role_id == 2:       
+        self.btn_add_order.show()
+        self.btn_delete_order.show()
+        self.btn_edit_order.hide() 
+        self.guest_label.hide()
+    else:                          
+        self.btn_add_order.hide()
+        self.btn_delete_order.hide()
+        self.btn_edit_order.hide()
+        self.guest_label.show()
+
+    print("Add button visible:", self.btn_add_order.isVisible())
+    print("Edit button visible:", self.btn_edit_order.isVisible())
+    print("Delete button visible:", self.btn_delete_order.isVisible())
 
     def go_back(self) -> None:
         if self.stacked_widget.currentIndex() != PAGE_CATALOG:
