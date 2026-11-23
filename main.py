@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 from product_card import ProductCard
+from datetime import date
 
 PAGE_CATALOG = 0
 PAGE_CART = 1
@@ -423,8 +424,68 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Ошибка", "Корзина пуста")
             return
 
-        QMessageBox.information(
-            self, "Оформление заказа",
-            "Корзина заполнена.\n"
-            "Сохранение заказа в БД будет реализовано на следующей паре (ПП 21).",
-        )
+        if self.user_id is None:
+            QMessageBox.critical(self, "Ошибка", "Пользователь не авторизован")
+            return
+
+        if self.db.cursor is None or self.db.connection is None:
+            QMessageBox.critical(self, "Ошибка", "Нет подключения к БД")
+            return
+
+        cursor = self.db.cursor
+
+        try:
+            cursor.execute(
+                """
+                INSERT INTO orders (order_date, user_id, status)
+                VALUES (%s, %s, %s)
+                RETURNING order_id
+                """,
+                (date.today(), self.user_id, "Новый"),
+            )
+            order_id = cursor.fetchone()[0]
+
+            for row in range(self.cart_table.rowCount()):
+                qty_item = self.cart_table.item(row, COL_QUANTITY)
+                price_item = self.cart_table.item(row, COL_PRICE)
+                pid_item = self.cart_table.item(row, COL_PRODUCT_ID)
+
+                if qty_item is None or price_item is None or pid_item is None:
+                    raise ValueError(
+                        f"Некорректные данные в строке корзины {row + 1}"
+                    )
+
+                product_id = int(pid_item.text())
+                quantity = int(qty_item.text())
+                price = float(price_item.text())
+
+                if quantity <= 0:
+                    raise ValueError("Количество должно быть больше 0")
+
+                cursor.execute(
+                    """
+                    INSERT INTO order_items
+                        (order_id, product_id, quantity, price)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (order_id, product_id, quantity, price),
+                )
+
+            self.db.connection.commit()
+
+            QMessageBox.information(
+                self,
+                "Успех",
+                f"Заказ №{order_id} оформлен",
+            )
+
+            self.cart_table.setRowCount(0)
+            self.update_total()
+
+        except Exception as e:
+            self.db.connection.rollback()
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Ошибка при сохранении заказа: {e}",
+            )
