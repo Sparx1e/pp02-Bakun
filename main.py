@@ -435,6 +435,29 @@ class MainWindow(QMainWindow):
         cursor = self.db.cursor
 
         try:
+            for row in range(self.cart_table.rowCount()):
+                qty_item = self.cart_table.item(row, COL_QUANTITY)
+                pid_item = self.cart_table.item(row, COL_PRODUCT_ID)
+                
+                if qty_item is None or pid_item is None:
+                    raise ValueError(f"Некорректные данные в строке корзины {row + 1}")
+
+                product_id = int(pid_item.text())
+                quantity = int(qty_item.text())
+
+                cursor.execute(
+                    "SELECT COALESCE(SUM(quantity), 0) FROM stock_items WHERE product_id = %s",
+                    (product_id,)
+                )
+                stock = cursor.fetchone()[0]
+                if stock < quantity:
+                    QMessageBox.critical(
+                        self, "Ошибка", 
+                        f"Недостаточно товара (ID {product_id}) на складе"
+                    )
+                    self.db.connection.rollback()
+                    return
+
             cursor.execute(
                 """
                 INSERT INTO orders (order_date, user_id, status)
@@ -451,9 +474,7 @@ class MainWindow(QMainWindow):
                 pid_item = self.cart_table.item(row, COL_PRODUCT_ID)
 
                 if qty_item is None or price_item is None or pid_item is None:
-                    raise ValueError(
-                        f"Некорректные данные в строке корзины {row + 1}"
-                    )
+                    raise ValueError(f"Некорректные данные в строке корзины {row + 1}")
 
                 product_id = int(pid_item.text())
                 quantity = int(qty_item.text())
@@ -464,12 +485,24 @@ class MainWindow(QMainWindow):
 
                 cursor.execute(
                     """
-                    INSERT INTO order_items
-                        (order_id, product_id, quantity, price)
+                    INSERT INTO order_items (order_id, product_id, quantity, price)
                     VALUES (%s, %s, %s, %s)
                     """,
                     (order_id, product_id, quantity, price),
                 )
+
+                cursor.execute(
+                    "UPDATE stock_items SET quantity = quantity - %s WHERE product_id = %s",
+                    (quantity, product_id)
+                )
+                
+                if cursor.rowcount == 0:
+                    QMessageBox.warning(
+                        self, "Ошибка", 
+                        f"Нет остатков для товара (ID {product_id})"
+                    )
+                    self.db.connection.rollback()
+                    return
 
             self.db.connection.commit()
 
