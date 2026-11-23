@@ -260,29 +260,16 @@ class ProductCard(QDialog):
 
     def add_selected_to_cart(self) -> None:
         if self.main_window is None:
-            QMessageBox.critical(self, "Ошибка", "Нет ссылки на главное окно")
-            return
-
+            QMessageBox.critical(self, "Ошибка", "Нет ссылки на главное окно"); return
         variant = self.variant_combo.currentText().strip()
         quantity = self.quantity_spin.value()
         name = self.name_label.text()
         price = self.current_price
         product_id = self.product_id
-
-        display_name = f"{name} ({variant})" if variant else name
-
         try:
-            self.main_window.add_to_cart(
-                display_name, quantity, price, product_id
-            )
+            self.main_window.add_to_cart(name, variant, quantity, price, product_id)
         except Exception as e:
-            QMessageBox.critical(
-                self, "Ошибка", f"Не удалось добавить товар: {e}"
-            )
-            return
-
-        QMessageBox.information(
-            self, "Корзина",
-            f"«{display_name}» × {quantity} добавлен в корзину",
-        )
+            QMessageBox.critical(self, "Ошибка", f"Не удалось добавить: {e}"); return
+        display = f"{name} ({variant})" if variant else name
+        QMessageBox.information(self, "Корзина", f"«{display}» × {quantity} добавлен")
     delete_product = None

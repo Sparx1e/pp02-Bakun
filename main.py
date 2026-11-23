@@ -2,739 +2,401 @@ from datetime import date
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QComboBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
+    QComboBox, QDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QSpinBox, QStackedWidget,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,QDialog
+    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 from product_card import ProductCard
 
-PAGE_CATALOG = 0
-PAGE_CART = 1
-PAGE_ORDERS = 2
-
-COL_NAME = 0
-COL_QUANTITY = 1
-COL_PRICE = 2
-COL_SUM = 3
-COL_PRODUCT_ID = 4
-
-CAT_COL_ID = 0
-CAT_COL_NAME = 1
-CAT_COL_DESC = 2
-CAT_COL_PRICE = 3
+PAGE_CATALOG, PAGE_CART, PAGE_ORDERS = 0, 1, 2
+COL_NAME, COL_QUANTITY, COL_PRICE, COL_SUM, COL_PRODUCT_ID, COL_VARIANT = range(6)
+CAT_COL_ID, CAT_COL_NAME, CAT_COL_DESC, CAT_COL_PRICE = range(4)
 
 
 class MainWindow(QMainWindow):
-    def __init__(
-        self,
-        db,
-        user_id: int | None = None,
-        role_id: int | None = None,
-        role_name: str | None = None,
-        full_name: str | None = None,
-    ):
+    def __init__(self, db, user_id=None, role_id=None, role_name=None, full_name=None):
         super().__init__()
         self.db = db
         self.user_id = user_id
         self.role_id = role_id
         self.role_name = role_name or "Гость"
         self.full_name = full_name or "Гость"
-
         self.setWindowTitle("Мир киберспорта")
         self.resize(960, 680)
-
         self.setup_ui()
         self.setup_role_interface()
-        self.load_products() # type: ignore
+        self.load_products()
 
-    def setup_ui(self) -> None:
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-
-        title_label = QLabel("Мир киберспорта")
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet(
-            "font-size: 24px; font-weight: bold; color: #458B8B;"
-        )
-
-        user_info_label = QLabel(
-            f"Вы вошли как: {self.full_name} ({self.role_name})"
-        )
-        user_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        main_layout.addWidget(title_label)
-        main_layout.addWidget(user_info_label)
-
-        self.stacked_widget = QStackedWidget()
-        main_layout.addWidget(self.stacked_widget, 1)
-
+    def setup_ui(self):
+        cw = QWidget(); self.setCentralWidget(cw)
+        ml = QVBoxLayout(cw)
+        t = QLabel("Мир киберспорта")
+        t.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        t.setStyleSheet("font-size: 24px; font-weight: bold; color: #458B8B;")
+        ml.addWidget(t)
+        ml.addWidget(QLabel(f"Вы вошли как: {self.full_name} ({self.role_name})"))
+        self.stacked_widget = QStackedWidget(); ml.addWidget(self.stacked_widget, 1)
         self._build_catalog_page()
         self._build_cart_page()
         self._build_orders_page()
-
-        self.back_button = QPushButton("← Назад в каталог")
-        self.back_button.clicked.connect(self.go_back)
-        main_layout.addWidget(self.back_button)
-
+        back = QPushButton("← Назад в каталог"); back.clicked.connect(self.go_back)
+        ml.addWidget(back)
         self.switch_page(PAGE_CATALOG)
 
-    def _build_catalog_page(self) -> None:
-        self.catalog_page = QWidget()
-        layout = QVBoxLayout(self.catalog_page)
-
-        logo_label = QLabel()
-        pixmap = QPixmap("logo.png")
-        if not pixmap.isNull():
-            logo_label.setPixmap(
-                pixmap.scaled(
-                    300, 100,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
-            logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            layout.addWidget(logo_label)
-
-        filter_layout = QHBoxLayout()
-
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Поиск по названию или описанию...")
+    def _build_catalog_page(self):
+        self.catalog_page = QWidget(); l = QVBoxLayout(self.catalog_page)
+        fl = QHBoxLayout()
+        self.search_input = QLineEdit(); self.search_input.setPlaceholderText("Поиск...")
         self.search_input.textChanged.connect(self.load_products)
-
-        self.category_combo = QComboBox()
-        self.category_combo.addItem("Все категории")
+        self.category_combo = QComboBox(); self.category_combo.addItem("Все категории")
         self.category_combo.currentIndexChanged.connect(self.load_products)
         self._load_categories_into_combo()
-
-        self.sort_combo = QComboBox()
-        self.sort_combo.addItems(["По возрастанию", "По убыванию"])
+        self.sort_combo = QComboBox(); self.sort_combo.addItems(["По возрастанию", "По убыванию"])
         self.sort_combo.currentIndexChanged.connect(self.load_products)
-
-        filter_layout.addWidget(self.search_input, 1)
-        filter_layout.addWidget(self.category_combo)
-        filter_layout.addWidget(QLabel("Сортировка:"))
-        filter_layout.addWidget(self.sort_combo)
-        layout.addLayout(filter_layout)
-
-        self.table = QTableWidget()
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(
-            ["ID", "Наименование", "Описание", "Цена"]
-        )
-        self.table.setSelectionBehavior(
-            QTableWidget.SelectionBehavior.SelectRows
-        )
+        fl.addWidget(self.search_input, 1); fl.addWidget(self.category_combo)
+        fl.addWidget(QLabel("Сортировка:")); fl.addWidget(self.sort_combo)
+        l.addLayout(fl)
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(["ID", "Наименование", "Описание", "Цена"])
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.doubleClicked.connect(self.open_selected_product_card)
-        layout.addWidget(self.table, 1)
-
-        self.btn_to_product = QPushButton("Открыть карточку выбранного товара")
-        self.btn_to_product.clicked.connect(self.open_selected_product_card)
-
-        self.btn_to_cart = QPushButton("Перейти в корзину")
-        self.btn_to_cart.clicked.connect(lambda: self.switch_page(PAGE_CART))
-
-        self.btn_to_orders = QPushButton("Перейти к заказам")
-        self.btn_to_orders.clicked.connect(lambda: self.switch_page(PAGE_ORDERS))
-
-        layout.addWidget(self.btn_to_product)
-        layout.addWidget(self.btn_to_cart)
-        layout.addWidget(self.btn_to_orders)
-
+        l.addWidget(self.table, 1)
+        b1 = QPushButton("Открыть карточку"); b1.clicked.connect(self.open_selected_product_card)
+        b2 = QPushButton("В корзину"); b2.clicked.connect(lambda: self.switch_page(PAGE_CART))
+        b3 = QPushButton("К заказам"); b3.clicked.connect(lambda: self.switch_page(PAGE_ORDERS))
+        l.addWidget(b1); l.addWidget(b2); l.addWidget(b3)
         self.stacked_widget.addWidget(self.catalog_page)
 
-    def _build_cart_page(self) -> None:
-        self.cart_page = QWidget()
-        layout = QVBoxLayout(self.cart_page)
-
-        cart_title = QLabel("Корзина — Мир киберспорта")
-        cart_title.setStyleSheet("font-size: 18px; font-weight: bold;")
-        layout.addWidget(cart_title)
-
-        self.cart_table = QTableWidget()
-        self.cart_table.setColumnCount(5)
+    def _build_cart_page(self):
+        self.cart_page = QWidget(); l = QVBoxLayout(self.cart_page)
+        l.addWidget(QLabel("Корзина"))
+        self.cart_table = QTableWidget(0, 6)
         self.cart_table.setHorizontalHeaderLabels(
-            ["Наименование", "Количество", "Цена", "Сумма", "ID"]
-        )
+            ["Наименование", "Кол-во", "Цена", "Сумма", "ID", "Вариант"])
         self.cart_table.setColumnHidden(COL_PRODUCT_ID, True)
-        self.cart_table.setSelectionBehavior(
-            QTableWidget.SelectionBehavior.SelectRows
-        )
+        self.cart_table.setColumnHidden(COL_VARIANT, True)
+        self.cart_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.cart_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.cart_table.horizontalHeader().setStretchLastSection(True)
-        layout.addWidget(self.cart_table, 1)
-
-        self.total_label = QLabel("Итого: 0 ₽")
-        self.total_label.setStyleSheet("font-size: 16px; font-weight: bold;")
-        self.total_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-        layout.addWidget(self.total_label)
-
-        change_row = QHBoxLayout()
-        self.change_quantity_spin = QSpinBox()
-        self.change_quantity_spin.setMinimum(1)
-        self.change_quantity_spin.setMaximum(999)
-
-        self.change_quantity_button = QPushButton("Изменить количество")
-        self.change_quantity_button.clicked.connect(self.change_quantity)
-
-        change_row.addWidget(QLabel("Новое количество:"))
-        change_row.addWidget(self.change_quantity_spin)
-        change_row.addWidget(self.change_quantity_button)
-        change_row.addStretch(1)
-        layout.addLayout(change_row)
-
-        btn_row = QHBoxLayout()
-
-        self.remove_button = QPushButton("Удалить выбранный товар")
-        self.remove_button.clicked.connect(self.remove_from_cart)
-
-        self.toggle_id_button = QPushButton("Показать / скрыть ID")
-        self.toggle_id_button.clicked.connect(self.toggle_product_id_column)
-
-        self.confirm_button = QPushButton("Оформить заказ")
-        self.confirm_button.clicked.connect(self.confirm_order)
-
-        btn_row.addWidget(self.remove_button)
-        btn_row.addWidget(self.toggle_id_button)
-        btn_row.addWidget(self.confirm_button)
-        layout.addLayout(btn_row)
-
+        l.addWidget(self.cart_table, 1)
+        self.total_label = QLabel("Итого: 0 ₽"); self.total_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        l.addWidget(self.total_label)
+        self.remove_button = QPushButton("Удалить"); self.remove_button.clicked.connect(self.remove_from_cart)
+        self.confirm_button = QPushButton("Оформить"); self.confirm_button.clicked.connect(self.confirm_order)
+        l.addWidget(self.remove_button); l.addWidget(self.confirm_button)
         self.stacked_widget.addWidget(self.cart_page)
 
-    def _build_orders_page(self) -> None:
-        self.orders_page = QWidget()
-        layout = QVBoxLayout(self.orders_page)
-
-        orders_title = QLabel("Заказы клиентов — Мир киберспорта")
-        orders_title.setStyleSheet("font-size: 18px; font-weight: bold;")
-        layout.addWidget(orders_title)
-
-        self.orders_table = QTableWidget()
-        self.orders_table.setColumnCount(4)
-        self.orders_table.setHorizontalHeaderLabels(
-            ["Дата", "ФИО клиента", "Сумма", "Статус"]
-        )
-        self.orders_table.setSelectionBehavior(
-            QTableWidget.SelectionBehavior.SelectRows
-        )
-        self.orders_table.setEditTriggers(
-            QTableWidget.EditTrigger.NoEditTriggers
-        )
-        self.orders_table.horizontalHeader().setStretchLastSection(True)
-
-        self.orders_table.cellClicked.connect(self.on_order_click)
-        layout.addWidget(self.orders_table, 1)
-
-        self.btn_refresh_orders = QPushButton("Обновить список заказов")
-        self.btn_refresh_orders.clicked.connect(self.load_orders)
-        layout.addWidget(self.btn_refresh_orders)
-
-        self.btn_add_order = QPushButton("Добавить заказ")
-        self.btn_delete_order = QPushButton("Удалить заказ")
+    def _build_orders_page(self):
+        self.orders_page = QWidget(); l = QVBoxLayout(self.orders_page)
+        l.addWidget(QLabel("Заказы"))
+        self.orders_table = QTableWidget(0, 4)
+        self.orders_table.setHorizontalHeaderLabels(["Дата", "Клиент", "Сумма", "Статус"])
+        self.orders_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.orders_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        l.addWidget(self.orders_table, 1)
+        self.btn_add_order = QPushButton("Добавить заказ"); self.btn_add_order.clicked.connect(self.open_add_order_dialog)
+        self.btn_delete_order = QPushButton("Удалить заказ"); self.btn_delete_order.clicked.connect(self.delete_selected_order)
         self.btn_edit_order = QPushButton("Редактировать заказ")
-
-        layout.addWidget(self.btn_add_order)
-        layout.addWidget(self.btn_delete_order)
-        layout.addWidget(self.btn_edit_order)
-
-        self.guest_label = QLabel(
-            "Доступ к управлению заказами имеют только менеджеры и администраторы."
-        )
-        self.guest_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.guest_label.hide()
-        layout.addWidget(self.guest_label)
-
+        self.btn_refresh_orders = QPushButton("Обновить"); self.btn_refresh_orders.clicked.connect(self.load_orders)
+        l.addWidget(self.btn_refresh_orders); l.addWidget(self.btn_add_order)
+        l.addWidget(self.btn_delete_order); l.addWidget(self.btn_edit_order)
         self.stacked_widget.addWidget(self.orders_page)
 
-    def switch_page(self, index: int) -> None:
-        self.stacked_widget.setCurrentIndex(index)
-
-        titles = [
-            "Мир киберспорта — Каталог",
-            "Мир киберспорта — Корзина",
-            "Мир киберспорта — Заказы",
-        ]
-        self.setWindowTitle(titles[index])
-
-        if index == PAGE_CATALOG:
-            self.refresh_catalog()
-        elif index == PAGE_CART:
-            self.update_total()
-        elif index == PAGE_ORDERS:
-    self.load_orders() # type: ignore
-
-    def _load_categories_into_combo(self):
-        ...
-    go_back = None
-
     def setup_role_interface(self):
-        ...
-    load_orders = None
-    on_order_click = None
-    confirm_order = None
-    toggle_product_id_column = None
-    remove_from_cart = None
-    change_quantity = None
+        if self.role_id == 1:
+            self.btn_add_order.show(); self.btn_delete_order.show(); self.btn_edit_order.show()
+        elif self.role_id == 2:
+            self.btn_add_order.show(); self.btn_delete_order.show(); self.btn_edit_order.hide()
+        else:
+            self.btn_add_order.hide(); self.btn_delete_order.hide(); self.btn_edit_order.hide()
 
-    def refresh_catalog(self):
-        ...
-
-    def update_total(self):
-        ...
-    open_selected_product_card = None
-    load_products = None
-
-def setup_role_interface(self) -> None:
-    """Разграничение доступа в зависимости от role_id."""
-    if self.role_id == 1:          
-        self.btn_add_order.show()
-        self.btn_delete_order.show()
-        self.btn_edit_order.show()
-        self.guest_label.hide()
-    elif self.role_id == 2:       
-        self.btn_add_order.show()
-        self.btn_delete_order.show()
-        self.btn_edit_order.hide() 
-        self.guest_label.hide()
-    else:                          
-        self.btn_add_order.hide()
-        self.btn_delete_order.hide()
-        self.btn_edit_order.hide()
-        self.guest_label.show()
-
-    print("Add button visible:", self.btn_add_order.isVisible())
-    print("Edit button visible:", self.btn_edit_order.isVisible())
-    print("Delete button visible:", self.btn_delete_order.isVisible())
-
-    def go_back(self) -> None:
+    def go_back(self):
         if self.stacked_widget.currentIndex() != PAGE_CATALOG:
             self.switch_page(PAGE_CATALOG)
 
-    def switch_page(self, index: int) -> None:
+    def switch_page(self, index):
         self.stacked_widget.setCurrentIndex(index)
-        titles = [
-            "Мир киберспорта — Каталог",
-            "Мир киберспорта — Корзина",
-            "Мир киберспорта — Заказы",
-        ]
-        self.setWindowTitle(titles[index])
+        self.setWindowTitle(["Мир киберспорта — Каталог", "Мир киберспорта — Корзина",
+                             "Мир киберспорта — Заказы"][index])
         if index == PAGE_CATALOG:
-            self.refresh_catalog()
+            self.load_products()
         elif index == PAGE_CART:
             self.update_total()
+        elif index == PAGE_ORDERS:
+            self.load_orders()
 
-    def closeEvent(self, event) -> None:
-        reply = QMessageBox.warning(
-            self, "Предупреждение", "Вы уверены, что хотите выйти?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-        if reply == QMessageBox.StandardButton.Yes:
-            event.accept()
-        else:
-            event.ignore()
-
-    def refresh_catalog(self) -> None:
-        self.load_products()
-
-    def _load_categories_into_combo(self) -> None:
+    def _load_categories_into_combo(self):
         try:
-            categories = self.db.fetch_categories()
+            cats = self.db.fetch_categories()
         except Exception:
-            categories = []
+            cats = []
         self.category_combo.blockSignals(True)
-        for cat in categories:
-            self.category_combo.addItem(cat)
+        for c in cats:
+            self.category_combo.addItem(c)
         self.category_combo.blockSignals(False)
 
-    def load_products(self, *_) -> None:
-        if not hasattr(self, "search_input") or not hasattr(self, "table"):
-            return
-
+    def load_products(self, *_):
         search = self.search_input.text().strip()
-        category = (
-            self.category_combo.currentText()
-            if hasattr(self, "category_combo")
-            else "Все категории"
-        )
-        sort = (
-            self.sort_combo.currentText()
-            if hasattr(self, "sort_combo")
-            else "По возрастанию"
-        )
-
+        cat = self.category_combo.currentText()
+        sort = self.sort_combo.currentText()
         try:
-            products = self.db.fetch_products(search, category, sort)
+            products = self.db.fetch_products(search, cat, sort)
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка загрузки товаров", str(e))
-            return
+            QMessageBox.critical(self, "Ошибка", str(e)); return
+        self.table.setRowCount(0); self.table.setRowCount(len(products))
+        for r, (pid, name, desc, price) in enumerate(products):
+            self.table.setItem(r, CAT_COL_ID, QTableWidgetItem(str(pid)))
+            self.table.setItem(r, CAT_COL_NAME, QTableWidgetItem(name))
+            self.table.setItem(r, CAT_COL_DESC, QTableWidgetItem(desc))
+            self.table.setItem(r, CAT_COL_PRICE, QTableWidgetItem(str(price)))
 
-        self.table.setRowCount(0)
-        self.table.setRowCount(len(products))
-        for row_idx, product in enumerate(products):
-            pid, name, description, price = product
-            self.table.setItem(row_idx, CAT_COL_ID, QTableWidgetItem(str(pid)))
-            self.table.setItem(row_idx, CAT_COL_NAME, QTableWidgetItem(name))
-            self.table.setItem(row_idx, CAT_COL_DESC, QTableWidgetItem(description))
-            self.table.setItem(row_idx, CAT_COL_PRICE, QTableWidgetItem(str(price)))
-
-    def open_selected_product_card(self, *_) -> None:
+    def open_selected_product_card(self, *_):
         row = self.table.currentRow()
         if row < 0:
-            QMessageBox.warning(
-                self, "Внимание",
-                "Выберите товар из списка (кликните по строке).",
-            )
-            return
+            QMessageBox.warning(self, "Внимание", "Выберите товар"); return
+        item = self.table.item(row, CAT_COL_ID)
+        if item is None: return
+        ProductCard(int(item.text()), self.role_id, self).exec()
 
-        pid_item = self.table.item(row, CAT_COL_ID)
-        if pid_item is None:
-            return
-        try:
-            product_id = int(pid_item.text())
-        except ValueError:
-            QMessageBox.critical(self, "Ошибка", "Некорректный ID товара")
-            return
-
-        card = ProductCard(product_id, self)
-        card.exec()
-
-    def add_to_cart(
-        self, name: str, quantity: int, price: float, product_id: int
-    ) -> None:
-        """Добавляет товар. Дубликат (name + product_id) увеличивает количество."""
-        try:
-            quantity = int(quantity)
-            price = float(price)
-        except (TypeError, ValueError) as e:
-            QMessageBox.critical(self, "Ошибка корзины", f"Неверные данные: {e}")
-            return
-
+    def add_to_cart(self, name, variant, quantity, price, product_id):
+        quantity = int(quantity); price = float(price)
         if quantity <= 0:
-            QMessageBox.warning(self, "Корзина", "Количество должно быть > 0")
-            return
-
-        existing_row = -1
+            QMessageBox.warning(self, "Корзина", "Кол-во > 0"); return
         for row in range(self.cart_table.rowCount()):
-            name_item = self.cart_table.item(row, COL_NAME)
-            id_item = self.cart_table.item(row, COL_PRODUCT_ID)
-            if (
-                name_item is not None
-                and id_item is not None
-                and id_item.text() == str(product_id)
-                and name_item.text() == name
-            ):
-                existing_row = row
-                break
-
-        if existing_row >= 0:
-            old_qty_item = self.cart_table.item(existing_row, COL_QUANTITY)
-            price_item = self.cart_table.item(existing_row, COL_PRICE)
-            old_qty = int(old_qty_item.text()) if old_qty_item else 0
-            stored_price = float(price_item.text()) if price_item else price
-            new_qty = old_qty + quantity
-
-            self.cart_table.setItem(
-                existing_row, COL_QUANTITY, QTableWidgetItem(str(new_qty))
-            )
-            self.cart_table.setItem(
-                existing_row, COL_SUM,
-                QTableWidgetItem(f"{new_qty * stored_price:.2f}")
-            )
-        else:
-            row = self.cart_table.rowCount()
-            self.cart_table.insertRow(row)
-            self.cart_table.setItem(row, COL_NAME, QTableWidgetItem(str(name)))
-            self.cart_table.setItem(row, COL_QUANTITY, QTableWidgetItem(str(quantity)))
-            self.cart_table.setItem(row, COL_PRICE, QTableWidgetItem(f"{price:.2f}"))
-            self.cart_table.setItem(
-                row, COL_SUM, QTableWidgetItem(f"{quantity * price:.2f}")
-            )
-            self.cart_table.setItem(
-                row, COL_PRODUCT_ID, QTableWidgetItem(str(product_id))
-            )
-
+            pid_item = self.cart_table.item(row, COL_PRODUCT_ID)
+            var_item = self.cart_table.item(row, COL_VARIANT)
+            if pid_item and var_item and pid_item.text() == str(product_id) and var_item.text() == (variant or ""):
+                old_qty = int(self.cart_table.item(row, COL_QUANTITY).text()) # type: ignore
+                new_qty = old_qty + quantity
+                self.cart_table.setItem(row, COL_QUANTITY, QTableWidgetItem(str(new_qty)))
+                self.cart_table.setItem(row, COL_SUM, QTableWidgetItem(f"{new_qty * price:.2f}"))
+                self.update_total(); return
+        r = self.cart_table.rowCount(); self.cart_table.insertRow(r)
+        display = f"{name} ({variant})" if variant else name
+        self.cart_table.setItem(r, COL_NAME, QTableWidgetItem(display))
+        self.cart_table.setItem(r, COL_QUANTITY, QTableWidgetItem(str(quantity)))
+        self.cart_table.setItem(r, COL_PRICE, QTableWidgetItem(f"{price:.2f}"))
+        self.cart_table.setItem(r, COL_SUM, QTableWidgetItem(f"{quantity * price:.2f}"))
+        self.cart_table.setItem(r, COL_PRODUCT_ID, QTableWidgetItem(str(product_id)))
+        self.cart_table.setItem(r, COL_VARIANT, QTableWidgetItem(variant or ""))
         self.update_total()
 
-    def change_quantity(self) -> None:
+    def remove_from_cart(self):
         row = self.cart_table.currentRow()
         if row < 0:
-            QMessageBox.warning(
-                self, "Внимание",
-                "Выберите товар в корзине, чтобы изменить количество",
-            )
-            return
+            QMessageBox.warning(self, "Внимание", "Выберите строку"); return
+        self.cart_table.removeRow(row); self.update_total()
 
-        price_item = self.cart_table.item(row, COL_PRICE)
-        if price_item is None:
-            QMessageBox.critical(self, "Ошибка", "Не удалось прочитать цену товара")
-            return
-        try:
-            price = float(price_item.text())
-        except ValueError:
-            QMessageBox.critical(self, "Ошибка", "Некорректная цена в корзине")
-            return
-
-        new_quantity = int(self.change_quantity_spin.value())
-
-        self.cart_table.setItem(
-            row, COL_QUANTITY, QTableWidgetItem(str(new_quantity))
-        )
-        self.cart_table.setItem(
-            row, COL_SUM, QTableWidgetItem(f"{new_quantity * price:.2f}")
-        )
-        self.update_total()
-
-    def remove_from_cart(self) -> None:
-        row = self.cart_table.currentRow()
-        if row < 0:
-            QMessageBox.warning(
-                self, "Внимание", "Выберите товар в корзине для удаления"
-            )
-            return
-        self.cart_table.removeRow(row)
-        self.update_total()
-
-    def update_total(self) -> None:
+    def update_total(self):
         total = 0.0
-        for row in range(self.cart_table.rowCount()):
-            item = self.cart_table.item(row, COL_SUM)
-            if item is None:
-                continue
-            try:
-                total += float(item.text())
-            except ValueError:
-                continue
+        for r in range(self.cart_table.rowCount()):
+            item = self.cart_table.item(r, COL_SUM)
+            if item:
+                try: total += float(item.text())
+                except ValueError: pass
+        self.total_label.setText(f"Итого: {total:.0f} ₽")
 
+    def confirm_order(self):
         if self.cart_table.rowCount() == 0:
-            self.total_label.setText("Итого: 0 ₽")
-        else:
-            self.total_label.setText(f"Итого: {total:.0f} ₽")
-
-    def toggle_product_id_column(self) -> None:
-        current = self.cart_table.isColumnHidden(COL_PRODUCT_ID)
-        self.cart_table.setColumnHidden(COL_PRODUCT_ID, not current)
-
-    def confirm_order(self) -> None:
-        if self.cart_table.rowCount() == 0:
-            QMessageBox.warning(self, "Ошибка", "Корзина пуста")
-            return
-
+            QMessageBox.warning(self, "Ошибка", "Корзина пуста"); return
         if self.user_id is None:
-            QMessageBox.critical(self, "Ошибка", "Пользователь не авторизован")
-            return
-
-        if self.db.cursor is None or self.db.connection is None:
-            QMessageBox.critical(self, "Ошибка", "Нет подключения к БД")
-            return
-
+            QMessageBox.critical(self, "Ошибка", "Нет авторизации"); return
         cursor = self.db.cursor
-
         try:
-            for row in range(self.cart_table.rowCount()):
-                qty_item = self.cart_table.item(row, COL_QUANTITY)
-                pid_item = self.cart_table.item(row, COL_PRODUCT_ID)
-                
-                if qty_item is None or pid_item is None:
-                    raise ValueError(f"Некорректные данные в строке корзины {row + 1}")
-
-                product_id = int(pid_item.text())
-                quantity = int(qty_item.text())
-
-                cursor.execute(
-                    "SELECT COALESCE(SUM(quantity), 0) FROM stock_items WHERE product_id = %s",
-                    (product_id,)
-                )
-                stock = cursor.fetchone()[0]
-                if stock < quantity:
-                    QMessageBox.critical(
-                        self, "Ошибка", 
-                        f"Недостаточно товара (ID {product_id}) на складе"
-                    )
-                    self.db.connection.rollback()
-                    return
-
             cursor.execute(
-                """
-                INSERT INTO orders (order_date, user_id, status)
-                VALUES (%s, %s, %s)
-                RETURNING order_id
-                """,
+                "INSERT INTO orders (order_date, user_id, status) VALUES (%s, %s, %s) RETURNING order_id",
                 (date.today(), self.user_id, "Новый"),
             )
             order_id = cursor.fetchone()[0]
-
-            for row in range(self.cart_table.rowCount()):
-                qty_item = self.cart_table.item(row, COL_QUANTITY)
-                price_item = self.cart_table.item(row, COL_PRICE)
-                pid_item = self.cart_table.item(row, COL_PRODUCT_ID)
-
-                if qty_item is None or price_item is None or pid_item is None:
-                    raise ValueError(f"Некорректные данные в строке корзины {row + 1}")
-
-                product_id = int(pid_item.text())
-                quantity = int(qty_item.text())
-                price = float(price_item.text())
-
-                if quantity <= 0:
-                    raise ValueError("Количество должно быть больше 0")
-
+            for r in range(self.cart_table.rowCount()):
+                pid = int(self.cart_table.item(r, COL_PRODUCT_ID).text()) # type: ignore
+                var = self.cart_table.item(r, COL_VARIANT).text() # type: ignore
+                qty = int(self.cart_table.item(r, COL_QUANTITY).text()) # type: ignore
+                price = float(self.cart_table.item(r, COL_PRICE).text()) # type: ignore
                 cursor.execute(
-                    """
-                    INSERT INTO order_items (order_id, product_id, quantity, price)
-                    VALUES (%s, %s, %s, %s)
-                    """,
-                    (order_id, product_id, quantity, price),
+                    "INSERT INTO order_items (order_id, product_id, variant, quantity, price) VALUES (%s,%s,%s,%s,%s)",
+                    (order_id, pid, var, qty, price),
                 )
-
                 cursor.execute(
-                    "UPDATE stock_items SET quantity = quantity - %s WHERE product_id = %s",
-                    (quantity, product_id)
+                    "UPDATE stock_items SET quantity = quantity - %s WHERE product_id = %s AND variant = %s",
+                    (qty, pid, var),
                 )
-                
-                if cursor.rowcount == 0:
-                    QMessageBox.warning(
-                        self, "Ошибка", 
-                        f"Нет остатков для товара (ID {product_id})"
-                    )
-                    self.db.connection.rollback()
-                    return
-
             self.db.connection.commit()
-
-            QMessageBox.information(
-                self,
-                "Успех",
-                f"Заказ №{order_id} оформлен",
-            )
-
-            self.cart_table.setRowCount(0)
-            self.update_total()
-
+            QMessageBox.information(self, "Успех", f"Заказ №{order_id} оформлен")
+            self.cart_table.setRowCount(0); self.update_total()
         except Exception as e:
             self.db.connection.rollback()
-            QMessageBox.critical(
-                self,
-                "Ошибка",
-                f"Ошибка при сохранении заказа: {e}",
-            )
+            QMessageBox.critical(self, "Ошибка", str(e))
 
-    def load_orders(self) -> None:
-        if not hasattr(self, "orders_table"):
+    def open_add_order_dialog(self):
+        AddOrderDialog(self.db, self).exec()
+        self.load_orders()
+
+    def delete_selected_order(self):
+        row = self.orders_table.currentRow()
+        if row < 0: return
+        item = self.orders_table.item(row, 0)
+        order_id = item.data(Qt.ItemDataRole.UserRole) if item else None
+        if order_id is None: return
+        if QMessageBox.question(self, "Удаление", f"Удалить заказ №{order_id}?") != QMessageBox.StandardButton.Yes:
             return
+        try:
+            self.db.cursor.execute("DELETE FROM order_items WHERE order_id = %s", (order_id,))
+            self.db.cursor.execute("DELETE FROM orders WHERE order_id = %s", (order_id,))
+            self.db.connection.commit(); self.load_orders()
+        except Exception as e:
+            self.db.connection.rollback(); QMessageBox.critical(self, "Ошибка", str(e))
 
+    def load_orders(self):
         try:
             orders = self.db.fetch_orders()
         except Exception as e:
-            QMessageBox.critical(
-                self, "Ошибка загрузки заказов", str(e)
-            )
-            return
+            QMessageBox.critical(self, "Ошибка", str(e)); return
+        self.orders_table.setRowCount(0); self.orders_table.setRowCount(len(orders))
+        for r, (oid, odate, fio, total, status) in enumerate(orders):
+            it = QTableWidgetItem(str(odate)); it.setData(Qt.ItemDataRole.UserRole, oid)
+            self.orders_table.setItem(r, 0, it)
+            self.orders_table.setItem(r, 1, QTableWidgetItem(str(fio)))
+            self.orders_table.setItem(r, 2, QTableWidgetItem(f"{float(total):.2f} ₽"))
+            self.orders_table.setItem(r, 3, QTableWidgetItem(str(status)))
 
-        self.orders_table.setRowCount(0)
-        self.orders_table.setRowCount(len(orders))
 
-        for row, order in enumerate(orders):
-            order_id, order_date, full_name, total, status = order
-
-            date_item = QTableWidgetItem(str(order_date))
-            date_item.setData(Qt.ItemDataRole.UserRole, order_id)
-
-            self.orders_table.setItem(row, 0, date_item)
-            self.orders_table.setItem(row, 1, QTableWidgetItem(str(full_name)))
-            self.orders_table.setItem(
-                row, 2, QTableWidgetItem(f"{float(total):.2f} ₽")
-            )
-            self.orders_table.setItem(row, 3, QTableWidgetItem(str(status)))
-
-        def on_order_click(self, row: int, column: int) -> None:
-            item = self.orders_table.item(row, 0)
-            if item is None:
-                return
-
-            order_id = item.data(Qt.ItemDataRole.UserRole)
-        if order_id is None:
-            return
-
-        self.load_order_details(int(order_id))
-
-    def load_order_details(self, order_id: int) -> None:
-        QMessageBox.information(
-            self,
-            "Состав заказа",
-            f"Выбран заказ №{order_id}.\n"
-            "Состав заказа будет реализован в РТ 37.",
-        )
-    class AddOrderDialog(QDialog):"""Диалог добавления заказа (менеджер/администратор)."""
-
+class AddOrderDialog(QDialog):
     def __init__(self, db, parent=None):
-        super().__init__(parent) # pyright: ignore
-        self.db = db
-        self.setWindowTitle("Добавить заказ — Мир киберспорта")
-        self.resize(420, 260)
-        self.setup_ui()
+        super().__init__(parent)
+        self.db = db; self.order_id = None; self.selected_product_id = None
+        self.stock_map = {}
+        self.setWindowTitle("Добавить заказ")
+        self.resize(700, 620)
+        self._build(); self.load_products()
 
-    def setup_ui(self) -> None:
-        layout = QVBoxLayout(self)
-
-        layout.addWidget(QLabel("Клиент:"))
+    def _build(self):
+        l = QVBoxLayout(self)
+        l.addWidget(QLabel("Клиент:"))
         self.client_combo = QComboBox()
-        cursor = self.db.cursor
-        cursor.execute(
-            """
-            SELECT user_id, CONCAT_WS(' ', last_name, first_name, middle_name)
-            FROM users
-            WHERE role_id = 3
-            ORDER BY last_name, first_name
-            """
+        for uid, fio in self.db.fetch_clients():
+            self.client_combo.addItem(fio, uid)
+        l.addWidget(self.client_combo)
+        l.addWidget(QLabel("Статус:"))
+        self.status_combo = QComboBox(); self.status_combo.addItems(["Новый", "В обработке", "Завершён"])
+        l.addWidget(self.status_combo)
+        b = QPushButton("Сохранить заказ"); b.clicked.connect(self.save_order); l.addWidget(b)
+        self.info = QLabel("Заказ не создан"); l.addWidget(self.info)
+        l.addWidget(QLabel("Поиск:"))
+        self.search_input = QLineEdit(); self.search_input.setPlaceholderText("Например: Мышь")
+        self.search_input.textChanged.connect(self.load_products); l.addWidget(self.search_input)
+        self.product_table = QTableWidget(0, 3)
+        self.product_table.setHorizontalHeaderLabels(["ID", "Товар", "Цена"])
+        self.product_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.product_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.product_table.cellClicked.connect(self.on_product_selected)
+        l.addWidget(self.product_table, 1)
+        l.addWidget(QLabel("Вариант:"))
+        self.variant_combo = QComboBox(); self.variant_combo.currentIndexChanged.connect(self.update_qty_limit)
+        l.addWidget(self.variant_combo)
+        l.addWidget(QLabel("Количество:"))
+        self.quantity_spin = QSpinBox(); self.quantity_spin.setMinimum(1); self.quantity_spin.setMaximum(1)
+        l.addWidget(self.quantity_spin)
+        self.add_item_button = QPushButton("Добавить в заказ")
+        self.add_item_button.clicked.connect(self.add_item_to_order)
+        self.add_item_button.setEnabled(False); l.addWidget(self.add_item_button)
+        c = QPushButton("Закрыть"); c.clicked.connect(self.accept); l.addWidget(c)
+
+    def load_products(self, *_):
+        search = self.search_input.text().strip()
+        self.db.cursor.execute(
+            "SELECT product_id, name, price FROM products WHERE name ILIKE %s ORDER BY name",
+            (f"%{search}%",),
         )
-        for user_id, full_name in cursor.fetchall():
-            self.client_combo.addItem(full_name, user_id)
-        layout.addWidget(self.client_combo)
+        rows = self.db.cursor.fetchall()
+        self.product_table.setRowCount(0); self.product_table.setRowCount(len(rows))
+        for r, (pid, name, price) in enumerate(rows):
+            it = QTableWidgetItem(str(pid)); it.setData(Qt.ItemDataRole.UserRole, pid)
+            self.product_table.setItem(r, 0, it)
+            self.product_table.setItem(r, 1, QTableWidgetItem(name))
+            self.product_table.setItem(r, 2, QTableWidgetItem(str(price)))
+        self.selected_product_id = None
+        self.variant_combo.clear()
+        self.quantity_spin.setMaximum(1)
+        self.add_item_button.setEnabled(False)
+        self.add_item_button.setText("Добавить в заказ")
 
-        layout.addWidget(QLabel("Статус:"))
-        self.status_combo = QComboBox()
-        self.status_combo.addItems(["Новый", "В обработке", "Завершён"])
-        self.status_combo.setCurrentIndex(0)
-        layout.addWidget(self.status_combo)
-
-        btn_layout = QHBoxLayout()
-        self.save_button = QPushButton("Сохранить")
-        self.save_button.clicked.connect(self.save_order)
-        self.cancel_button = QPushButton("Отмена")
-        self.cancel_button.clicked.connect(self.reject)
-        btn_layout.addWidget(self.save_button)
-        btn_layout.addWidget(self.cancel_button)
-        layout.addLayout(btn_layout)
-
-    def save_order(self) -> None:
-        cursor = self.db.cursor
+    def save_order(self):
+        if self.order_id is not None:
+            QMessageBox.information(self, "Инфо", f"Заказ №{self.order_id} уже создан")
+            return
         try:
-            user_id = self.client_combo.currentData()
-            status = self.status_combo.currentText()
-
-            if user_id is None:
-                raise ValueError("Не выбран клиент")
-
-            cursor.execute(
-                """
-                INSERT INTO orders (order_date, user_id, status)
-                VALUES (%s, %s, %s)
-                RETURNING order_id
-                """,
-                (date.today(), user_id, status),
+            uid = self.client_combo.currentData()
+            if uid is None: raise ValueError("Не выбран клиент")
+            self.db.cursor.execute(
+                "INSERT INTO orders (order_date, user_id, status) VALUES (%s,%s,%s) RETURNING order_id",
+                (date.today(), uid, self.status_combo.currentText()),
             )
-            order_id = cursor.fetchone()[0]
+            self.order_id = self.db.cursor.fetchone()[0]
             self.db.connection.commit()
-
-            QMessageBox.information(
-                self, "Успех", f"Заказ №{order_id} добавлен"
-            )
-            self.accept()
+            self.info.setText(f"Заказ №{self.order_id} создан")
+            QMessageBox.information(self, "Успех", f"Заказ №{self.order_id} создан")
         except Exception as e:
-            if self.db.connection:
-                self.db.connection.rollback()
-            QMessageBox.critical(
-                self, "Ошибка", f"Не удалось сохранить заказ:\n{e}"
+            self.db.connection.rollback(); QMessageBox.critical(self, "Ошибка", str(e))
+
+    def on_product_selected(self, row, _col=0):
+        item = self.product_table.item(row, 0)
+        if item is None: return
+        self.selected_product_id = int(item.data(Qt.ItemDataRole.UserRole) or item.text())
+        self.db.cursor.execute(
+            "SELECT variant, quantity, price FROM stock_items WHERE product_id = %s ORDER BY variant",
+            (self.selected_product_id,),
+        )
+        rows = self.db.cursor.fetchall()
+        self.variant_combo.blockSignals(True); self.variant_combo.clear(); self.stock_map.clear()
+        for var, qty, price in rows:
+            self.variant_combo.addItem(f"{var} (остаток: {qty})", var)
+            self.stock_map[var] = (int(qty), float(price))
+        self.variant_combo.blockSignals(False)
+        if self.variant_combo.count() > 0:
+            self.update_qty_limit()
+        else:
+            self.add_item_button.setEnabled(False); self.add_item_button.setText("Нет в наличии")
+
+    def update_qty_limit(self):
+        if self.selected_product_id is None or self.variant_combo.count() == 0:
+            self.add_item_button.setEnabled(False); return
+        var = self.variant_combo.currentData()
+        qty, price = self.stock_map.get(var, (0, 0.0))
+        self.quantity_spin.setMaximum(max(qty, 1))
+        self.add_item_button.setEnabled(qty > 0)
+        self.add_item_button.setText(
+            f"Добавить ({price:.0f} руб.)" if qty > 0 else "Нет в наличии")
+
+    def add_item_to_order(self):
+        if self.order_id is None:
+            QMessageBox.warning(self, "Ошибка", "Сначала сохраните заказ"); return
+        if self.selected_product_id is None:
+            QMessageBox.warning(self, "Ошибка", "Выберите товар"); return
+        var = self.variant_combo.currentData()
+        if not var:
+            QMessageBox.warning(self, "Ошибка", "Выберите вариант"); return
+        qty = self.quantity_spin.value()
+        try:
+            self.db.cursor.execute(
+                "SELECT quantity, price FROM stock_items WHERE product_id = %s AND variant = %s",
+                (self.selected_product_id, var),
             )
+            row = self.db.cursor.fetchone()
+            if row is None: raise ValueError("Вариант не найден")
+            stock, price = int(row[0]), float(row[1])
+            if qty > stock: raise ValueError(f"На складе только {stock} шт.")
+            self.db.cursor.execute(
+                "INSERT INTO order_items (order_id, product_id, variant, quantity, price) VALUES (%s,%s,%s,%s,%s)",
+                (self.order_id, self.selected_product_id, var, qty, price),
+            )
+            self.db.cursor.execute(
+                "UPDATE stock_items SET quantity = quantity - %s WHERE product_id = %s AND variant = %s",
+                (qty, self.selected_product_id, var),
+            )
+            self.db.connection.commit()
+            QMessageBox.information(self, "Успех", "Товар добавлен в заказ")
+            self.load_products()
+        except Exception as e:
+            self.db.connection.rollback(); QMessageBox.critical(self, "Ошибка", str(e))
