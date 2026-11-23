@@ -145,3 +145,46 @@ class Database:
             """
         )
         return self.cursor.fetchall()
+
+    def fetch_order_details(self, order_id: int):
+        """Возвращает список (product_id, name, quantity, price, total)."""
+        assert self.cursor is not None
+        self.cursor.execute(
+            """
+            SELECT
+                oi.product_id,
+                COALESCE(p.name, 'Товар удален') AS name,
+                oi.quantity,
+                oi.price,
+                (oi.quantity * oi.price) AS total
+            FROM order_items oi
+            LEFT JOIN products p ON oi.product_id = p.product_id
+            WHERE oi.order_id = %s
+            ORDER BY oi.product_id, oi.price
+            """,
+            (order_id,),
+        )
+        return self.cursor.fetchall()
+
+    def fetch_order_total(self, order_id: int):
+            """Возвращает итоговую сумму заказа (SUM)."""
+            assert self.cursor is not None
+            self.cursor.execute(
+                """
+                SELECT COALESCE(SUM(quantity * price), 0) AS total
+                FROM order_items
+                WHERE order_id = %s
+                """,
+                (order_id,),
+            )
+            return self.cursor.fetchone()[0] # type: ignore
+
+    def delete_order_item(self, order_id: int, product_id: int) -> None:
+        """Удаляет все позиции указанного товара из заказа."""
+        assert self.connection is not None
+        with self.connection.cursor() as cur:
+            cur.execute(
+                "DELETE FROM order_items WHERE order_id = %s AND product_id = %s",
+                (order_id, product_id),
+            )
+        self.connection.commit()
